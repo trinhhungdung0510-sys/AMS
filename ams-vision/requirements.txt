@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+requests
+numpy
+opencv-python-headless
+ultralytics

@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ams-postgres
+    environment:
+      POSTGRES_DB: ams
+      POSTGRES_USER: ams
+      POSTGRES_PASSWORD: ams_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ams -d ams"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ams-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ams-vision:
+    build:
+      context: ../ams-vision
+    container_name: ams-vision
+    environment:
+      BACKEND_BASE_URL: http://host.docker.internal:8000
+      CAMERA_ID: CAM-001
+      MOCK_DETECTION: "true"
+      MOCK_DETECTION_INTERVAL: "30"
+      PUBLISH_CATEGORY: restricted_zone_intrusion
+      SNAPSHOTS_DIR: /app/snapshots
+    ports:
+      - "8010:8010"
+    volumes:
+      - vision_snapshots:/app/snapshots
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres_data:
+  redis_data:
+  vision_snapshots:
