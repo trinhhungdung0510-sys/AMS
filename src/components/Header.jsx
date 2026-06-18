@@ -1,4 +1,5 @@
 import { Bell } from 'lucide-react'
+import { BrandLogo } from './BrandLogo'
 
 function Header({ title, subtitle }) {
   const today = new Date().toLocaleDateString('vi-VN', {
@@ -11,7 +12,7 @@ function Header({ title, subtitle }) {
   return (
     <header className="header">
       <div className="header__left">
-        <div className="header__logo">AMS</div>
+        <BrandLogo height={48} showWordmark={false} to="/dashboard" className="header__brand brand-logo--horizontal" />
         <div className="header__title-group">
           <div className="header__breadcrumb">
             <span>Hệ thống giám sát AI</span>

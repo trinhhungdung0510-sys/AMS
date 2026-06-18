@@ -1,0 +1,176 @@
+/**
+ * TIN NGHIA AMS — Shell & global component brand overrides
+ * Loaded after App.css to refine the application chrome.
+ */
+
+/* ── App shell ─────────────────────────────────────────────── */
+
+.app-shell {
+  background:
+    radial-gradient(ellipse 80% 60% at 100% 0%, rgba(243, 106, 16, 0.1), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, rgba(11, 107, 27, 0.09), transparent 50%),
+    var(--gray-50);
+}
+
+.page-content {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(11, 107, 27, 0.04), transparent 42%),
+    radial-gradient(circle at 88% 92%, rgba(243, 106, 16, 0.05), transparent 38%),
+    transparent;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+
+.sidebar {
+  background: var(--brand-gradient-sidebar);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar__item--active {
+  background: linear-gradient(135deg, var(--orange-600) 0%, var(--orange-700) 100%);
+  box-shadow: 0 10px 24px rgba(243, 106, 16, 0.32);
+}
+
+.sidebar__item:hover:not(.sidebar__item--active) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar__version {
+  background: rgba(243, 106, 16, 0.24) !important;
+  color: #ffd7bc !important;
+}
+
+.sidebar__status-dot {
+  background: var(--brand-orange);
+  box-shadow: 0 0 10px rgba(243, 106, 16, 0.55);
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+
+.header {
+  position: relative;
+  padding-left: 32px;
+  background:
+    linear-gradient(90deg, rgba(11, 107, 27, 0.06) 0%, rgba(255, 255, 255, 0.94) 28%),
+    rgba(255, 255, 255, 0.94);
+  border-bottom: 1px solid rgba(11, 107, 27, 0.12);
+  backdrop-filter: blur(14px);
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--brand-accent-bar);
+}
+
+.header__title {
+  color: var(--green-900);
+}
+
+.header__breadcrumb-current {
+  color: var(--brand-orange);
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+
+.app-footer {
+  text-align: center;
+  padding: 20px 16px;
+  color: var(--gray-600);
+  font-size: 13px;
+}
+
+.app-footer p:first-child {
+  margin: 0 0 4px;
+  color: var(--green-800);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.app-footer p:last-child {
+  margin: 0;
+  color: var(--brand-orange);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+
+.btn--primary {
+  background: linear-gradient(135deg, var(--orange-600) 0%, var(--orange-700) 100%);
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(243, 106, 16, 0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(243, 106, 16, 0.34);
+}
+
+.btn--outline:hover,
+.btn--ghost:hover {
+  border-color: var(--green-600);
+  color: var(--green-800);
+  background: var(--green-50);
+}
+
+/* ── Panels & metric cards — top accent bar ────────────────── */
+
+.panel,
+.metric-card {
+  position: relative;
+  border-color: rgba(11, 107, 27, 0.14);
+}
+
+.panel::before,
+.metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--brand-accent-top);
+  border-radius: 16px 16px 0 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.panel__header h2,
+.metric-card__label {
+  color: var(--green-900);
+}
+
+/* ── Data table ────────────────────────────────────────────── */
+
+.data-table th {
+  background: linear-gradient(180deg, var(--green-50) 0%, rgba(240, 253, 244, 0.6) 100%);
+  color: var(--green-800);
+  border-bottom: 1px solid rgba(11, 107, 27, 0.14);
+  font-weight: 800;
+}
+
+.data-table tr:hover td {
+  background: var(--green-50);
+}
+
+/* ── Search box ────────────────────────────────────────────── */
+
+.search-box:focus-within {
+  border-color: var(--green-600);
+  box-shadow: var(--focus-ring);
+}
+
+/* ── Status tags ───────────────────────────────────────────── */
+
+.status-tag--processing {
+  background: var(--orange-100);
+  color: var(--orange-700);
+}

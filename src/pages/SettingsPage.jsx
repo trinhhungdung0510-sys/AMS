@@ -69,8 +69,8 @@ function SettingsPage() {
               </svg>
               Thêm camera
             </button>
-            <Link to="/settings/zones" className="btn btn--outline">
-              Zone Designer
+            <Link to="/thiet-ke-vung-atsh" className="btn btn--outline">
+              Thiết kế vùng ATSH
             </Link>
           </div>
 

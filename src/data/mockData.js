@@ -34,6 +34,10 @@ export const pageMeta = {
     title: 'Tổng quan',
     subtitle: 'Tổng quan giám sát AI và an toàn sinh học trại heo',
   },
+  'bang-dieu-khien': {
+    title: 'Bảng điều khiển chủ trại',
+    subtitle: 'Điểm ATSH, bản đồ trang trại và vi phạm — cập nhật thời gian thực',
+  },
   compliance: {
     title: 'Tuân thủ ATSH',
     subtitle: 'Điểm tuân thủ, xu hướng vi phạm và khu vực rủi ro',
@@ -54,17 +58,37 @@ export const pageMeta = {
     title: 'Sự kiện',
     subtitle: 'Bảng cảnh báo AI với tìm kiếm, lọc và xuất Excel',
   },
+  violations: {
+    title: 'Trung tâm vi phạm ATSH',
+    subtitle: 'Giám sát và xử lý vi phạm an toàn sinh học theo thời gian thực',
+  },
+  'vi-pham-atsh': {
+    title: 'Trung tâm vi phạm ATSH',
+    subtitle: 'Vi phạm ATSH, sự kiện AI — giám sát và xử lý theo thời gian thực',
+  },
   rules: {
     title: 'Quy tắc ATSH',
-    subtitle: 'Danh mục và cấu hình quy tắc an toàn sinh học',
+    subtitle: 'Danh sách quy tắc an toàn sinh học — bật hoặc tắt theo nhu cầu',
+  },
+  'quy-tac-atsh': {
+    title: 'Quy tắc ATSH',
+    subtitle: 'Danh sách quy tắc an toàn sinh học — bật hoặc tắt theo nhu cầu',
   },
   map: {
     title: 'Bản đồ trang trại',
-    subtitle: 'Sơ đồ khu vực và vị trí camera theo trạng thái rủi ro',
+    subtitle: 'Bản đồ vận hành ATSH theo khu vực',
+  },
+  'ban-do-trang-trai': {
+    title: 'Bản đồ trang trại',
+    subtitle: 'Xem và thiết kế sơ đồ trại trên vệ tinh — khu vực, camera, ATSH, luồng di chuyển',
   },
   settings: {
     title: 'Cài đặt',
     subtitle: 'Người dùng, phân quyền, camera và kênh nhận cảnh báo',
+  },
+  'thiet-ke-vung-atsh': {
+    title: 'Thiết kế vùng ATSH',
+    subtitle: 'Chỉnh sửa vùng an toàn sinh học trực tiếp trên hình ảnh camera',
   },
 }
 

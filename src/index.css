@@ -5,15 +5,30 @@
 }
 
 :root {
-  --green-900: #0f3d1f;
-  --green-800: #14532d;
-  --green-700: #166534;
-  --green-600: #15803d;
+  /* TIN NGHIA AMS — màu logo */
+  --brand-green: #0b6b1b;
+  --brand-orange: #f36a10;
+
+  /* Thang xanh lá */
+  --green-950: #052e11;
+  --green-900: #084d15;
+  --green-800: #0b6b1b;
+  --green-700: #0d7a22;
+  --green-600: #12852a;
+  --green-500: #16a34a;
+  --green-200: #bbf7d0;
   --green-100: #dcfce7;
   --green-50: #f0fdf4;
-  --orange-600: #ea580c;
+
+  /* Thang cam */
+  --orange-700: #c4510a;
+  --orange-600: #f36a10;
   --orange-500: #f97316;
+  --orange-200: #fed7aa;
   --orange-100: #ffedd5;
+  --orange-50: #fff7ed;
+
+  /* Trung tính ấm */
   --gray-50: #f8faf9;
   --gray-100: #f1f5f3;
   --gray-200: #e2e8e5;
@@ -21,9 +36,20 @@
   --gray-600: #4b5563;
   --gray-800: #1f2937;
   --white: #ffffff;
+
+  /* Gradient thương hiệu */
+  --brand-gradient: linear-gradient(135deg, var(--brand-green) 0%, #0d7a22 52%, var(--brand-orange) 115%);
+  --brand-gradient-soft: linear-gradient(135deg, rgba(11, 107, 27, 0.08) 0%, rgba(243, 106, 16, 0.06) 100%);
+  --brand-gradient-sidebar: linear-gradient(180deg, #084d15 0%, #0b6b1b 48%, #0a5c18 100%);
+  --brand-accent-bar: linear-gradient(180deg, var(--brand-green), var(--brand-orange));
+  --brand-accent-top: linear-gradient(90deg, var(--brand-green), var(--brand-orange));
+
   --shadow-sm: 0 1px 2px rgba(15, 61, 31, 0.06);
   --shadow-md: 0 4px 12px rgba(15, 61, 31, 0.08);
   --shadow-lg: 0 8px 24px rgba(15, 61, 31, 0.1);
+  --shadow-brand: 0 10px 28px rgba(11, 107, 27, 0.12);
+  --focus-ring: 0 0 0 3px rgba(11, 107, 27, 0.16);
+
   --radius: 12px;
   --sidebar-width: 240px;
   --header-height: 64px;
@@ -39,6 +65,11 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+::selection {
+  background: rgba(243, 106, 16, 0.22);
+  color: var(--green-900);
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -48,6 +79,34 @@ body {
   min-height: 100vh;
 }
 
+a {
+  color: var(--green-700);
+}
+
+a:hover {
+  color: var(--brand-orange);
+}
+
+input,
+select,
+textarea {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--green-600) !important;
+  box-shadow: var(--focus-ring);
+}
+
 button {
   font-family: inherit;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--brand-orange);
+  outline-offset: 2px;
 }

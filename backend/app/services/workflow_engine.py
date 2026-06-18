@@ -20,6 +20,7 @@ from app.models import (
     WorkflowStep,
     ZoneTransition,
 )
+from app.services.atsh_pipeline import atsh_pipeline, build_workflow_context
 from app.services.audit import write_audit_log
 from app.services.snapshot_generator import SnapshotAnnotation, create_event_snapshot
 from app.services.vi_localization import resolve_severity_label, resolve_zone_name
@@ -77,6 +78,24 @@ def evaluate_workflow(db: Session, transition: ZoneTransition) -> Optional[dict]
         violation = _evaluate_single_workflow(db, transition, workflow)
         if violation:
             last_violation = violation
+
+    progress_rows = list(
+        db.scalars(
+            select(TrackWorkflowProgress)
+            .where(TrackWorkflowProgress.track_id == transition.track_id)
+            .where(TrackWorkflowProgress.camera_id == transition.camera_id)
+        )
+    )
+    zone_history = _load_zone_history(db, track_id=transition.track_id)
+    context = build_workflow_context(
+        db,
+        transition,
+        zone_history=zone_history,
+        progress_rows=progress_rows,
+        workflows=workflows,
+        violation_payload=last_violation,
+    )
+    atsh_pipeline.run_post_workflow(db, context)
     return last_violation
 
 
@@ -282,6 +301,20 @@ def _evaluate_single_workflow(
     progress = _get_or_create_progress(db, transition, workflow.id)
     next_expected_order = progress.completed_step_order + 1
     final_step_order = steps[-1].step_order
+    from_step = _match_step(steps, transition.from_zone)
+
+    if from_step and matched_step.step_order < from_step.step_order:
+        return _create_violation(
+            db,
+            transition=transition,
+            workflow=workflow,
+            skipped_steps=[
+                f"Đi ngược từ {from_step.step_name} (bước {from_step.step_order}) "
+                f"về {matched_step.step_name} (bước {matched_step.step_order})"
+            ],
+            attempted_step=matched_step.step_name,
+            violation_code="DI_NGUOC_TUYEN",
+        )
 
     if matched_step.step_order <= progress.completed_step_order:
         progress.last_zone = transition.to_zone

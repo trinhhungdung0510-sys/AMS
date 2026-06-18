@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.data.workflow_defaults import DEFAULT_PERSON_ENTRY_WORKFLOW
+from app.data.workflow_defaults import DEFAULT_PERSON_ENTRY_WORKFLOW, WORKFLOW_VIOLATION_CODES
 from app.database.session import get_db
 from app.models import Workflow, WorkflowStep
 from app.schemas.workflow import (
@@ -17,7 +17,9 @@ from app.schemas.workflow import (
     WorkflowResponse,
     WorkflowStepResponse,
     WorkflowUpdate,
+    WorkflowViolationType,
 )
+from app.services.atsh_pipeline import atsh_pipeline
 from app.services.workflow_engine import (
     get_compliance_summary,
     get_workflow_dashboard,
@@ -80,6 +82,23 @@ def workflow_compliance_summary(
         return WorkflowComplianceSummary(**get_compliance_summary(db, workflow_id))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/violation-types", response_model=list[WorkflowViolationType])
+def list_workflow_violation_types() -> list[WorkflowViolationType]:
+    return [
+        WorkflowViolationType(ma=code, ten=label)
+        for code, label in WORKFLOW_VIOLATION_CODES.items()
+    ]
+
+
+@router.get("/pipeline")
+def workflow_pipeline_status() -> dict:
+    return {
+        "version": "v3.1",
+        "engines": atsh_pipeline.registered_engines,
+        "next": ["route_engine_v32", "contact_risk_engine_v33", "atsh_score_engine_v34"],
+    }
 
 
 @router.get("/dashboard", response_model=WorkflowDashboardResponse)

@@ -1,6 +1,9 @@
 """Danh mục tiếng Việt chuẩn AMS v2.6."""
 
 SEVERITY_LABELS = {
+    "CRITICAL": "Nghiêm trọng",
+    "WARNING": "Cảnh báo",
+    "INFO": "Thông tin",
     "critical": "Nghiêm trọng",
     "danger": "Nghiêm trọng",
     "high": "Mức cao",

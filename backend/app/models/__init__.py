@@ -12,7 +12,12 @@ from app.models.employee import Employee
 from app.models.event import Event
 from app.models.event_snapshot import EventSnapshot
 from app.models.farm import Farm
+from app.models.farm_layout import FarmLayout
 from app.models.farm_layout_template import FarmLayoutTemplate
+from app.models.farm_map_layout import FarmMapLayout
+from app.models.farm_map_layer import FarmMapLayer
+from app.models.farm_object import FarmObject
+from app.models.farm_route import FarmRoute
 from app.models.farm_zone import FarmZone
 from app.models.farm_map_object import FarmMapObject
 from app.models.template_zone_definition import TemplateZoneDefinition
@@ -43,7 +48,12 @@ __all__ = [
     "Event",
     "EventSnapshot",
     "Farm",
+    "FarmLayout",
     "FarmLayoutTemplate",
+    "FarmMapLayer",
+    "FarmMapLayout",
+    "FarmObject",
+    "FarmRoute",
     "FarmMapObject",
     "FarmZone",
     "TemplateZoneDefinition",

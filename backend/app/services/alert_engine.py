@@ -5,9 +5,11 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AITask, AlertCategory, Camera, Event
+from app.data.biosecurity_ai_v40 import AI_CATEGORY_TO_ATSH_RULE
+from app.models import AITask, AlertCategory, BiosecurityRule, Camera
+from app.services.atsh_biosecurity_engine import create_atsh_violation_event
 from app.services.audit import write_audit_log
-from app.services.snapshot_generator import SnapshotAnnotation, create_event_snapshot, resolve_zone_display_name
+from app.services.snapshot_generator import resolve_zone_display_name
 
 
 def process_ai_task(db: Session, task: AITask) -> dict:
@@ -22,36 +24,68 @@ def process_ai_task(db: Session, task: AITask) -> dict:
         return {"type": "task_failed", "task_id": task.id}
 
     now = datetime.now(timezone.utc)
-    event_id = f"EVT-RT-{uuid.uuid4().hex[:8].upper()}"
-    snapshot_id = f"SNP-RT-{uuid.uuid4().hex[:8].upper()}"
     confidence = 88 + (int(uuid.uuid4().hex[:2], 16) % 12)
+    rule_code = AI_CATEGORY_TO_ATSH_RULE.get(category.code, "FORBIDDEN_ZONE_INTRUSION")
+    rule = db.scalar(
+        select(BiosecurityRule)
+        .where(BiosecurityRule.rule_code == rule_code)
+        .where(BiosecurityRule.enabled.is_(True))
+        .limit(1)
+    )
 
-    event = Event(
-        id=event_id,
-        farm_id=camera.farm_id,
-        camera_id=camera.id,
-        category=category.code,
-        alert_type=category.label,
-        zone=camera.zone,
-        severity=category.severity,
-        status="new",
-        handler="Chưa phân công",
-        confidence=confidence,
-        occurred_at=now.isoformat(),
-    )
-    snapshot = create_event_snapshot(
-        event_id=event_id,
-        snapshot_id=snapshot_id,
-        storage_category="runtime",
-        annotation=SnapshotAnnotation(
-            object_label=category.label,
-            zone_name=resolve_zone_display_name(db, camera.zone),
-            rule_name=category.label,
-            timestamp=now.isoformat(),
-            severity=category.severity,
+    if rule:
+        payload = create_atsh_violation_event(
+            db,
+            rule=rule,
+            transition=None,
+            camera_id=camera.id,
+            zone_code=camera.zone,
+            object_type=category.code,
+            occurred_at=now.isoformat(),
             confidence=confidence,
-        ),
-    )
+        )
+        event_id = payload["event_id"]
+        snapshot_id = payload["snapshot_id"]
+        alert_type = payload["ten_vi_pham"]
+        severity = payload["severity"]
+    else:
+        from app.models import Event
+        from app.services.snapshot_generator import SnapshotAnnotation, create_event_snapshot
+
+        event_id = f"EVT-RT-{uuid.uuid4().hex[:8].upper()}"
+        snapshot_id = f"SNP-RT-{uuid.uuid4().hex[:8].upper()}"
+        alert_type = category.label
+        severity = category.severity
+        event = Event(
+            id=event_id,
+            farm_id=camera.farm_id,
+            camera_id=camera.id,
+            category="atsh_violation",
+            alert_type=f"Vi phạm ATSH: {category.label}"[:120],
+            zone=camera.zone,
+            severity=severity,
+            status="new",
+            handler="Chưa phân công",
+            confidence=confidence,
+            occurred_at=now.isoformat(),
+            violation_code=rule_code,
+        )
+        snapshot = create_event_snapshot(
+            event_id=event_id,
+            snapshot_id=snapshot_id,
+            storage_category="biosecurity",
+            annotation=SnapshotAnnotation(
+                object_label=category.label,
+                zone_name=resolve_zone_display_name(db, camera.zone),
+                rule_name=category.label,
+                timestamp=now.isoformat(),
+                severity=severity,
+                confidence=confidence,
+            ),
+        )
+        db.add(event)
+        db.add(snapshot)
+        payload = {"event_id": event_id, "snapshot_id": snapshot_id, "severity": severity}
 
     task.status = "completed"
     task.processed_at = now.isoformat()
@@ -61,12 +95,11 @@ def process_ai_task(db: Session, task: AITask) -> dict:
             "snapshot_id": snapshot_id,
             "notification": "triggered",
             "confidence": confidence,
+            "atsh_rule_code": rule_code,
         },
         ensure_ascii=False,
     )
 
-    db.add(event)
-    db.add(snapshot)
     db.add(task)
     write_audit_log(
         db,
@@ -74,11 +107,11 @@ def process_ai_task(db: Session, task: AITask) -> dict:
         action="ai_task_completed",
         resource_type="ai_task",
         resource_id=task.id,
-        metadata={"event_id": event_id, "snapshot_id": snapshot_id},
+        metadata={"event_id": event_id, "snapshot_id": snapshot_id, "atsh_rule_code": rule_code},
     )
 
     return {
-        "type": "alert",
+        "type": "atsh_violation",
         "task_id": task.id,
         "event_id": event_id,
         "snapshot_id": snapshot_id,
@@ -86,9 +119,10 @@ def process_ai_task(db: Session, task: AITask) -> dict:
         "camera_name": camera.name,
         "zone": camera.zone,
         "category": category.code,
-        "alert_type": category.label,
-        "severity": category.severity,
+        "alert_type": alert_type,
+        "rule_code": rule_code,
+        "severity": payload.get("severity", category.severity),
         "confidence": confidence,
-        "occurred_at": event.occurred_at,
-        "notification": {"email": True, "telegram": category.severity in {"danger", "critical"}},
+        "occurred_at": now.isoformat(),
+        "notification": {"email": True, "telegram": payload.get("severity") == "CRITICAL"},
     }

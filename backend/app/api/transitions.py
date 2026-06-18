@@ -18,7 +18,7 @@ from app.services.biosecurity_engine import evaluate_transition
 from app.services.workflow_engine import evaluate_workflow
 from app.services.zone_crossing_engine import process_zone_crossing
 
-router = APIRouter(prefix="/transitions", tags=["zone-transitions"])
+router = APIRouter(tags=["zone-transitions"])
 
 
 @router.get("", response_model=list[ZoneTransitionResponse])
@@ -71,7 +71,9 @@ async def register_zone_crossing(
 
     db.flush()
     violation_payload = evaluate_transition(db, transition)
-    intrusion_payload = evaluate_animal_intrusion(db, transition)
+    intrusion_payload = None
+    if not violation_payload:
+        intrusion_payload = evaluate_animal_intrusion(db, transition)
     workflow_payload = evaluate_workflow(db, transition)
     db.commit()
     db.refresh(transition)
@@ -94,7 +96,7 @@ async def register_zone_crossing(
         await dashboard_manager.broadcast(
             {
                 "type": "dashboard_update",
-                "source": "biosecurity_rule_engine",
+                "source": "atsh_biosecurity_engine",
                 "event_id": violation_payload["event_id"],
             }
         )
@@ -138,7 +140,9 @@ async def create_transition(payload: ZoneTransitionCreate, db: Session = Depends
     db.add(transition)
     db.flush()
     violation_payload = evaluate_transition(db, transition)
-    intrusion_payload = evaluate_animal_intrusion(db, transition)
+    intrusion_payload = None
+    if not violation_payload:
+        intrusion_payload = evaluate_animal_intrusion(db, transition)
     workflow_payload = evaluate_workflow(db, transition)
     db.commit()
     db.refresh(transition)
@@ -147,7 +151,7 @@ async def create_transition(payload: ZoneTransitionCreate, db: Session = Depends
         await dashboard_manager.broadcast(
             {
                 "type": "dashboard_update",
-                "source": "biosecurity_rule_engine",
+                "source": "atsh_biosecurity_engine",
                 "event_id": violation_payload["event_id"],
             }
         )

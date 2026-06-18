@@ -14,6 +14,8 @@ class ZonePolygon(Base):
     zone_type: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
     biosecurity_level: Mapped[str] = mapped_column(String(20), index=True, nullable=False, default="yellow")
     color: Mapped[str] = mapped_column(String(20), nullable=False)
+    opacity: Mapped[float] = mapped_column(default=0.3, nullable=False)
+    description: Mapped[str] = mapped_column(String(500), default="", nullable=False)
     polygon_points: Mapped[list[list[float]]] = mapped_column(JSON, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[str] = mapped_column(String(32), nullable=False)

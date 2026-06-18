@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import time
+
 import httpx
 
 BASE = "http://127.0.0.1:8000"
 CAMERA_ID = "CAM-001"
+TRACK_BASE = int(time.time()) % 100000 * 10
 
 
 def cross(track_id: int, zone_id: str, timestamp: str) -> dict | None:
@@ -58,7 +61,7 @@ def main() -> None:
     results = [
         run_scenario(
             "Đi đúng quy trình vào chuồng nái",
-            track_id=1001,
+            track_id=TRACK_BASE + 1,
             zones=[
                 "worker_housing",
                 "shower_room",
@@ -70,13 +73,13 @@ def main() -> None:
         ),
         run_scenario(
             "Bỏ qua nhà tắm",
-            track_id=1002,
+            track_id=TRACK_BASE + 2,
             zones=["worker_housing", "gestation_barn"],
             expected_codes={"KHONG_TAM_SAT_TRUNG", "KHONG_SAT_TRUNG_TAY", "KHONG_SAT_TRUNG_UNG"},
         ),
         run_scenario(
             "Bỏ qua sát trùng tay",
-            track_id=1003,
+            track_id=TRACK_BASE + 3,
             zones=[
                 "worker_housing",
                 "shower_room",
@@ -87,7 +90,7 @@ def main() -> None:
         ),
         run_scenario(
             "Bỏ qua sát trùng ủng",
-            track_id=1004,
+            track_id=TRACK_BASE + 4,
             zones=[
                 "worker_housing",
                 "shower_room",
@@ -96,10 +99,27 @@ def main() -> None:
             ],
             expected_codes={"KHONG_SAT_TRUNG_UNG"},
         ),
+        run_scenario(
+            "Đi ngược tuyến",
+            track_id=TRACK_BASE + 5,
+            zones=[
+                "worker_housing",
+                "shower_room",
+                "handwash_zone",
+                "boot_disinfection_tray",
+                "shower_room",
+            ],
+            expected_codes={"DI_NGUOC_TUYEN"},
+        ),
     ]
 
-    track_detail = httpx.get(f"{BASE}/api/tracks/1001").json()
-    print(f"\nTrack 1001 visits: {len(track_detail['lich_su_vung'])} zones")
+    violation_types = httpx.get(f"{BASE}/api/workflows/violation-types").json()
+    print(f"\nLoại vi phạm ATSH: {len(violation_types)}")
+    pipeline = httpx.get(f"{BASE}/api/workflows/pipeline").json()
+    print(f"Pipeline: {pipeline['version']} → {pipeline['next']}")
+
+    track_detail = httpx.get(f"{BASE}/api/tracks/{TRACK_BASE + 1}").json()
+    print(f"\nTrack {TRACK_BASE + 1} visits: {len(track_detail['lich_su_vung'])} zones")
 
     dashboard = httpx.get(f"{BASE}/api/workflows/dashboard").json()
     print(f"Vi phạm hôm nay: {dashboard['vi_pham_hom_nay']}")

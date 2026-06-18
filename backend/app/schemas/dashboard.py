@@ -9,6 +9,12 @@ class DashboardSummaryResponse(BaseModel):
     tong_su_kien: int
     su_kien_rui_ro_cao: int
     su_kien_dang_mo: int
+    tong_vi_pham_atsh: int = 0
+    vi_pham_atsh_hom_nay: int = 0
+    vi_pham_atsh_info: int = 0
+    vi_pham_atsh_warning: int = 0
+    vi_pham_atsh_critical: int = 0
+    top_quy_tac_atsh: list[dict] = []
 
 
 class DashboardTrendItem(BaseModel):

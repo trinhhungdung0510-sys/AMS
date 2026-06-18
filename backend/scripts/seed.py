@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.core.security import hash_password
 from app.data.workflow_defaults import DEFAULT_WORKFLOWS, build_workflow_steps
 from app.data.animal_intrusion import DEFAULT_ANIMAL_INTRUSION_POLICIES
+from app.data.biosecurity_ai_v40 import V4_ATSH_RULES
 from app.data.biosecurity_rules_vn import DEFAULT_BIOSECURITY_RULES_VN
 from app.data.vi_catalog import DEFAULT_ZONE_TEMPLATE_VI
 from app.data.farm_template import (
@@ -29,8 +30,13 @@ from app.models import (
     Event,
     EventSnapshot,
     Farm,
+    FarmLayout,
     FarmLayoutTemplate,
+    FarmMapLayout,
+    FarmMapLayer,
     FarmMapObject,
+    FarmObject,
+    FarmRoute,
     FarmZone,
     License,
     NotificationGateway,
@@ -114,16 +120,63 @@ FARM_ZONES_VI = [
     for index, (zone_code, zone_name, zone_level, zone_category) in enumerate(DEFAULT_ZONE_TEMPLATE_VI, start=1)
 ]
 
+FARM_MAP_LAYOUT = (
+    "MAP-LAYOUT-001",
+    "FARM-001",
+    "Bản đồ trang trại chính",
+    False,
+    True,
+    10.9321,
+    106.8521,
+    17,
+    "satellite",
+)
+
 FARM_MAP_OBJECTS = [
-    ("MAP-001", "gate", "Cổng chính", "Khu tiếp khách", 56.0, 74.0, "danger"),
-    ("MAP-002", "quarantine_zone", "Chuồng cách ly", "Chuồng cách ly", 4.0, 62.0, "critical"),
-    ("MAP-003", "disinfection_zone", "Khu sát trùng xe", "Khu sát trùng xe", 20.0, 60.0, "warning"),
-    ("MAP-004", "camera", "Camera Cổng trại", "Khu tiếp khách", 56.0, 74.0, "online"),
-    ("MAP-005", "camera", "Camera Khu nái 01", "Chuồng nái bầu", 26.0, 8.0, "online"),
-    ("MAP-006", "camera", "Camera Khu đực giống", "Chuồng đực giống", 70.0, 8.0, "online"),
-    ("MAP-007", "camera", "Camera Khu cách ly", "Chuồng cách ly", 4.0, 62.0, "offline"),
-    ("MAP-008", "disinfection_zone", "Khu sát trùng người", "Khu sát trùng người", 20.0, 48.0, "warning"),
-    ("MAP-009", "camera", "Camera Kho cám", "Kho cám", 72.0, 48.0, "online"),
+    ("MAP-001", "MAP-LAYOUT-001", "gate-in", "Cổng vào", "Cổng trại", "", 10.93172, 106.85152, 0.00025, 0.00035, 0, "dirty", "yellow", None, None, None, None, "active"),
+    ("MAP-002", "MAP-LAYOUT-001", "pig-quarantine", "Chuồng cách ly heo", "Chuồng cách ly", "", 10.93255, 106.85285, 0.00045, 0.00055, 0, "quarantine", "red", None, None, None, None, "active"),
+    ("MAP-003", "MAP-LAYOUT-001", "shower", "Nhà tắm", "Hành lang chính", "", 10.93195, 106.85185, 0.00035, 0.0004, 0, "sanitation", "green", None, None, None, None, "active"),
+    ("MAP-004", "MAP-LAYOUT-001", "camera", "Camera Cổng trại", "Cổng trại", "", 10.93175, 106.85155, 0.00008, 0.00008, 45, "clean", "green", "CAM-001", "MAP-001", 90.0, 60.0, "online"),
+    ("MAP-005", "MAP-LAYOUT-001", "camera", "Camera Khu nái 01", "Khu nái", "", 10.93235, 106.85215, 0.00008, 0.00008, 0, "clean", "green", "CAM-002", "MAP-006", 135.0, 55.0, "online"),
+    ("MAP-006", "MAP-LAYOUT-001", "gestation", "Chuồng nái", "Khu nái", "", 10.9323, 106.8521, 0.0005, 0.0006, 0, "clean", "green", None, None, None, None, "active"),
+    ("MAP-007", "MAP-LAYOUT-001", "camera", "Camera Khu cách ly", "Chuồng cách ly", "", 10.93258, 106.85288, 0.00008, 0.00008, 0, "quarantine", "orange", "CAM-005", "MAP-002", 180.0, 60.0, "offline"),
+    ("MAP-008", "MAP-LAYOUT-001", "feed", "Kho cám", "Kho cám", "", 10.93185, 106.85135, 0.00035, 0.0004, 0, "dirty", "orange", None, None, None, None, "active"),
+    ("MAP-009", "MAP-LAYOUT-001", "camera", "Camera Kho cám", "Kho cám", "", 10.93188, 106.85138, 0.00008, 0.00008, 0, "dirty", "yellow", "CAM-008", "MAP-008", 270.0, 55.0, "online"),
+]
+
+SMART_FARM_LAYOUT = (
+    "SF-LAYOUT-001",
+    "FARM-001",
+    "Sơ đồ trang trại AMS",
+    "Ấp Bình Minh, Xã Long Thành, Đồng Nai",
+    10.9321,
+    106.8521,
+    17,
+    "satellite",
+    False,
+    True,
+)
+
+SMART_FARM_OBJECTS = FARM_MAP_OBJECTS
+
+SMART_FARM_ROUTES = [
+    (
+        "SF-ROUTE-001",
+        "SF-LAYOUT-001",
+        "worker",
+        "Luồng công nhân",
+        '[[10.93195, 106.85185], [10.9321, 106.8520], [10.9323, 106.8521]]',
+        '["Nhà tắm", "Sát trùng", "Chuồng nái"]',
+        True,
+    ),
+]
+
+SMART_FARM_LAYERS = [
+    ("SF-LAYOUT-001-L1", "SF-LAYOUT-001", "objects", True, 1.0),
+    ("SF-LAYOUT-001-L2", "SF-LAYOUT-001", "cameras", True, 1.0),
+    ("SF-LAYOUT-001-L3", "SF-LAYOUT-001", "atsh", True, 0.85),
+    ("SF-LAYOUT-001-L4", "SF-LAYOUT-001", "routes", True, 1.0),
+    ("SF-LAYOUT-001-L5", "SF-LAYOUT-001", "heatmap", False, 0.6),
 ]
 
 ZONE_POLYGONS = [
@@ -489,12 +542,99 @@ def seed() -> None:
             db.merge(
                 FarmMapObject(
                     id=map_object[0],
-                    object_type=map_object[1],
-                    name=map_object[2],
-                    zone=map_object[3],
-                    x=map_object[4],
-                    y=map_object[5],
-                    status=map_object[6],
+                    layout_id=map_object[1],
+                    object_type=map_object[2],
+                    name=map_object[3],
+                    zone=map_object[4],
+                    description=map_object[5],
+                    x=map_object[6],
+                    y=map_object[7],
+                    width=map_object[8],
+                    height=map_object[9],
+                    rotation=map_object[10],
+                    atsh_zone_type=map_object[11],
+                    atsh_level=map_object[12],
+                    linked_camera_id=map_object[13],
+                    linked_zone_id=map_object[14],
+                    camera_direction=map_object[15],
+                    camera_fov=map_object[16],
+                    status=map_object[17],
+                )
+            )
+
+        db.merge(
+            FarmMapLayout(
+                id=FARM_MAP_LAYOUT[0],
+                farm_id=FARM_MAP_LAYOUT[1],
+                name=FARM_MAP_LAYOUT[2],
+                is_template=FARM_MAP_LAYOUT[3],
+                is_active=FARM_MAP_LAYOUT[4],
+                center_lat=FARM_MAP_LAYOUT[5],
+                center_lng=FARM_MAP_LAYOUT[6],
+                zoom=FARM_MAP_LAYOUT[7],
+                base_layer=FARM_MAP_LAYOUT[8],
+            )
+        )
+
+        db.merge(
+            FarmLayout(
+                id=SMART_FARM_LAYOUT[0],
+                farm_id=SMART_FARM_LAYOUT[1],
+                name=SMART_FARM_LAYOUT[2],
+                address=SMART_FARM_LAYOUT[3],
+                center_lat=SMART_FARM_LAYOUT[4],
+                center_lng=SMART_FARM_LAYOUT[5],
+                zoom=SMART_FARM_LAYOUT[6],
+                base_layer=SMART_FARM_LAYOUT[7],
+                is_template=SMART_FARM_LAYOUT[8],
+                is_active=SMART_FARM_LAYOUT[9],
+            )
+        )
+
+        for obj in SMART_FARM_OBJECTS:
+            db.merge(
+                FarmObject(
+                    id=obj[0],
+                    layout_id=SMART_FARM_LAYOUT[0],
+                    object_type=obj[2],
+                    name=obj[3],
+                    description=obj[5],
+                    x=obj[6],
+                    y=obj[7],
+                    width=obj[8],
+                    height=obj[9],
+                    rotation=obj[10],
+                    atsh_zone_type=obj[11],
+                    atsh_level=obj[12],
+                    linked_camera_id=obj[13],
+                    linked_zone_id=obj[14],
+                    camera_direction=obj[15],
+                    camera_fov=obj[16],
+                    status=obj[17],
+                )
+            )
+
+        for route in SMART_FARM_ROUTES:
+            db.merge(
+                FarmRoute(
+                    id=route[0],
+                    layout_id=route[1],
+                    route_type=route[2],
+                    name=route[3],
+                    points=route[4],
+                    labels=route[5],
+                    valid=route[6],
+                )
+            )
+
+        for layer in SMART_FARM_LAYERS:
+            db.merge(
+                FarmMapLayer(
+                    id=layer[0],
+                    layout_id=layer[1],
+                    layer_key=layer[2],
+                    visible=layer[3],
+                    opacity=layer[4],
                 )
             )
 
@@ -508,6 +648,8 @@ def seed() -> None:
                     zone_type=zone_polygon[4],
                     biosecurity_level=zone_polygon[5],
                     color=zone_polygon[6],
+                    opacity=0.3,
+                    description="",
                     polygon_points=zone_polygon[7],
                     active=zone_polygon[8],
                     created_at="2026-06-17T18:17:00+07:00",
@@ -536,6 +678,27 @@ def seed() -> None:
         for old_rule in list(db.scalars(select(BiosecurityRule).where(BiosecurityRule.id.like("BR-VN-%")))):
             db.delete(old_rule)
         db.flush()
+
+        for rule in V4_ATSH_RULES:
+            db.merge(
+                BiosecurityRule(
+                    id=rule[0],
+                    rule_code=rule[1],
+                    rule_name_vi=rule[2],
+                    rule_name_en=rule[3],
+                    category=rule[4],
+                    severity=rule[5].lower(),
+                    description=rule[6],
+                    enabled=True,
+                    created_at=SEED_CREATED_AT,
+                    object_type=rule[9],
+                    from_zone=None,
+                    to_zone=None,
+                    required_zone=None,
+                    rule_type=rule[7],
+                    evaluation_mode=rule[8],
+                )
+            )
 
         for rule in DEFAULT_BIOSECURITY_RULES_VN:
             db.merge(
@@ -752,7 +915,7 @@ def seed() -> None:
             "2 edge devices, 3 notification gateways, 2 licenses, 9 streams, "
             "6 AI models, 50 AI events, 20 snapshots, 1 farm template, 20 template zones, "
             "20 farm zones, 9 map objects, 6 zone polygons, 8 zone transitions, "
-            f"{len(DEFAULT_BIOSECURITY_RULES_VN)} quy tắc ATSH VN, {len(BIOSECURITY_RULES)} quy tắc vận hành, "
+            f"{len(V4_ATSH_RULES)} quy tắc ATSH v4.0, {len(DEFAULT_BIOSECURITY_RULES_VN)} quy tắc ATSH VN, {len(BIOSECURITY_RULES)} quy tắc vận hành, "
             f"{len(EMPLOYEES)} employees, {len(VISITORS)} visitors, 6 notification rules, 12 AI tasks, 4 audit logs."
         )
     finally:

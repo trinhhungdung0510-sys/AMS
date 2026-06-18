@@ -12,6 +12,7 @@ from app.schemas.dashboard import (
     DashboardTopZoneItem,
     DashboardTrendItem,
 )
+from app.services.atsh_biosecurity_engine import get_atsh_violation_summary
 from app.services.vi_localization import resolve_camera_name, resolve_zone_name
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -22,7 +23,8 @@ def dashboard_summary(db: Session = Depends(get_db)) -> DashboardSummaryResponse
     cameras = list(db.scalars(select(Camera)))
     events = list(db.scalars(select(Event)))
     farms = list(db.scalars(select(Farm)))
-    high_events = [event for event in events if event.severity in {"danger", "critical", "high"}]
+    high_events = [event for event in events if event.severity in {"danger", "critical", "high", "CRITICAL"}]
+    atsh_summary = get_atsh_violation_summary(db)
 
     return DashboardSummaryResponse(
         tong_camera=len(cameras),
@@ -32,6 +34,12 @@ def dashboard_summary(db: Session = Depends(get_db)) -> DashboardSummaryResponse
         tong_su_kien=len(events),
         su_kien_rui_ro_cao=len(high_events),
         su_kien_dang_mo=sum(1 for event in events if event.status in {"new", "processing"}),
+        tong_vi_pham_atsh=atsh_summary["tong_vi_pham_atsh"],
+        vi_pham_atsh_hom_nay=atsh_summary["vi_pham_hom_nay"],
+        vi_pham_atsh_info=atsh_summary["theo_muc_do"]["INFO"],
+        vi_pham_atsh_warning=atsh_summary["theo_muc_do"]["WARNING"],
+        vi_pham_atsh_critical=atsh_summary["theo_muc_do"]["CRITICAL"],
+        top_quy_tac_atsh=atsh_summary["top_quy_tac"],
     )
 
 

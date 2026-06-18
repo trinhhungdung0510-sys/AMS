@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.data.biosecurity_ai_v40 import FARM_AREA_TYPES, normalize_atsh_severity
 from app.data.vi_catalog import CATEGORY_LABELS, SEVERITY_LABELS
 from app.database.session import get_db
 from app.models import BiosecurityRule
@@ -13,6 +14,7 @@ from app.schemas.biosecurity_rule import (
     BiosecurityRuleCreate,
     BiosecurityRuleResponse,
     BiosecurityRuleUpdate,
+    FarmAreaTypeResponse,
 )
 
 router = APIRouter(prefix="/biosecurity-rules", tags=["biosecurity-rules"])
@@ -53,11 +55,25 @@ def _validate_category(category: str) -> None:
 
 
 def _validate_severity(severity: str) -> None:
-    if severity not in SEVERITY_LABELS:
+    normalized = normalize_atsh_severity(severity)
+    if normalized not in {"INFO", "WARNING", "CRITICAL"} and severity.lower() not in SEVERITY_LABELS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Mức độ cảnh báo không hợp lệ: {severity}",
         )
+
+
+@router.get("/farm-areas", response_model=list[FarmAreaTypeResponse])
+def list_farm_area_types() -> list[FarmAreaTypeResponse]:
+    return [
+        FarmAreaTypeResponse(
+            ma_vung=code,
+            ten_vi=ten_vi,
+            ten_en=ten_en,
+            muc_atsh=muc,
+        )
+        for code, ten_vi, ten_en, muc in FARM_AREA_TYPES
+    ]
 
 
 @router.get("/categories", response_model=list[BiosecurityCategoryResponse])
@@ -111,7 +127,7 @@ def create_rule(payload: BiosecurityRuleCreate, db: Session = Depends(get_db)) -
         rule_name_vi=payload.rule_name_vi,
         rule_name_en=payload.rule_name_en or payload.rule_name_vi,
         category=payload.category,
-        severity=payload.severity.lower(),
+        severity=normalize_atsh_severity(payload.severity).lower(),
         description=payload.description,
         enabled=payload.enabled,
         created_at=_now_iso(),

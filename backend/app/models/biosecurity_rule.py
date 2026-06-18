@@ -22,3 +22,5 @@ class BiosecurityRule(Base):
     from_zone: Mapped[Optional[str]] = mapped_column(String(40), index=True, nullable=True)
     to_zone: Mapped[Optional[str]] = mapped_column(String(40), index=True, nullable=True)
     required_zone: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    rule_type: Mapped[Optional[str]] = mapped_column(String(40), index=True, nullable=True)
+    evaluation_mode: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)

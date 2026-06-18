@@ -5,7 +5,15 @@ WORKFLOW_VIOLATION_CODES = {
     "KHONG_SAT_TRUNG_TAY": "Không sát trùng tay",
     "KHONG_SAT_TRUNG_UNG": "Không sát trùng ủng",
     "DI_SAI_QUY_TRINH": "Đi sai quy trình",
+    "DI_NGUOC_TUYEN": "Đi ngược tuyến",
 }
+
+STANDARD_ENTRY_FLOW = [
+    "worker_housing",
+    "shower_room",
+    "handwash_zone",
+    "boot_disinfection_tray",
+]
 
 VIOLATION_CODE_BY_ZONE = {
     "shower_room": "KHONG_TAM_SAT_TRUNG",

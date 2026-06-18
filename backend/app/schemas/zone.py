@@ -21,6 +21,8 @@ class ZonePolygonBase(BaseModel):
     zone_type: str = Field(min_length=1, max_length=40)
     biosecurity_level: str = Field(default="yellow", max_length=20)
     color: Optional[str] = None
+    opacity: float = Field(default=0.3, ge=0.05, le=1.0)
+    description: str = Field(default="", max_length=500)
     polygon_points: list[list[float]] = Field(min_length=3)
     active: bool = True
 
@@ -36,6 +38,8 @@ class ZonePolygonUpdate(BaseModel):
     zone_type: Optional[str] = Field(default=None, min_length=1, max_length=40)
     biosecurity_level: Optional[str] = Field(default=None, max_length=20)
     color: Optional[str] = None
+    opacity: Optional[float] = Field(default=None, ge=0.05, le=1.0)
+    description: Optional[str] = Field(default=None, max_length=500)
     polygon_points: Optional[list[list[float]]] = Field(default=None, min_length=3)
     active: Optional[bool] = None
 
@@ -48,6 +52,8 @@ class ZonePolygonResponse(BaseModel):
     cap_atsh: str
     muc_atsh: str
     mau_sac: str
+    do_mo: float
+    mo_ta: str
     camera_id: str
     trang_trai_id: str
     diem_polygon: list[list[float]]

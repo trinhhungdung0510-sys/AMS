@@ -42,6 +42,8 @@ def zone_to_response_dict(zone: ZonePolygon) -> dict:
         "cap_atsh": level,
         "muc_atsh": ATSH_LEVEL_LABELS.get(level, level),
         "mau_sac": zone.color,
+        "do_mo": zone.opacity if zone.opacity is not None else 0.3,
+        "mo_ta": zone.description or "",
         "camera_id": zone.camera_id,
         "trang_trai_id": zone.farm_id,
         "diem_polygon": zone.polygon_points,

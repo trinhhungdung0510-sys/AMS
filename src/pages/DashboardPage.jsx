@@ -21,8 +21,10 @@ import {
   onlineCameraCount,
 } from '../data/mockData'
 
+import { LOGO_SRC } from '../components/BrandLogo'
+
 const API_BASE_URL = 'http://127.0.0.1:8000'
-const COLORS = ['#14532d', '#f97316', '#dc2626', '#facc15', '#64748b']
+const COLORS = ['#0B6B1B', '#F36A10', '#dc2626', '#facc15', '#64748b']
 
 const zoneLabels = {
   parking_zone: 'Bãi đỗ xe',
@@ -51,6 +53,7 @@ function DashboardPage() {
   const [recentCrossings, setRecentCrossings] = useState([])
   const [workflowCompliance, setWorkflowCompliance] = useState(null)
   const [workflowDashboard, setWorkflowDashboard] = useState(null)
+  const [atshSummary, setAtshSummary] = useState(null)
   const criticalCount = events.filter((event) => ['danger', 'critical'].includes(event.severity)).length
   const stats = [
     { label: 'Camera', value: cameras.length, icon: Camera, tone: 'green' },
@@ -96,11 +99,24 @@ function DashboardPage() {
       }
     }
 
+    const loadAtshSummary = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/dashboard/summary`)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const data = await response.json()
+        setAtshSummary(data)
+      } catch {
+        setAtshSummary(null)
+      }
+    }
+
     loadWorkflowCompliance()
     loadWorkflowDashboard()
+    loadAtshSummary()
     const workflowTimer = setInterval(() => {
       loadWorkflowCompliance()
       loadWorkflowDashboard()
+      loadAtshSummary()
     }, 15000)
     return () => {
       clearInterval(timer)
@@ -110,6 +126,7 @@ function DashboardPage() {
 
   return (
     <div className="dashboard-page">
+      <img src={LOGO_SRC} alt="TIN NGHIA AMS" className="dashboard-page__brand-mark" />
       <section className="stat-grid">
         {stats.map((stat) => (
           <article key={stat.label} className={`metric-card metric-card--${stat.tone}`}>
@@ -165,6 +182,57 @@ function DashboardPage() {
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>
+        </article>
+      </section>
+
+      <section className="dashboard-grid dashboard-grid--lists">
+        <article className="panel panel--workflow">
+          <div className="panel__header">
+            <div>
+              <h2>Vi phạm ATSH (Biosecurity AI)</h2>
+              <p>AMS v4.0 — phát hiện vi phạm an toàn sinh học</p>
+            </div>
+            <span className="panel__badge panel__badge--score">
+              <ShieldAlert size={16} />
+              {atshSummary?.vi_pham_atsh_hom_nay ?? '--'}
+            </span>
+          </div>
+          {atshSummary ? (
+            <>
+              <div className="workflow-stats">
+                <div>
+                  <strong>{atshSummary.vi_pham_atsh_hom_nay ?? 0}</strong>
+                  <span>Hôm nay</span>
+                </div>
+                <div>
+                  <strong>{atshSummary.vi_pham_atsh_critical ?? 0}</strong>
+                  <span>CRITICAL</span>
+                </div>
+                <div>
+                  <strong>{atshSummary.vi_pham_atsh_warning ?? 0}</strong>
+                  <span>WARNING</span>
+                </div>
+                <div>
+                  <strong>{atshSummary.vi_pham_atsh_info ?? 0}</strong>
+                  <span>INFO</span>
+                </div>
+              </div>
+              <div className="rank-list">
+                {(atshSummary.top_quy_tac_atsh || []).slice(0, 5).map((item, index) => (
+                  <div key={item.ma_quy_tac} className="rank-item">
+                    <span className="rank-item__index">{index + 1}</span>
+                    <div>
+                      <strong>{item.ma_quy_tac}</strong>
+                      <p>Quy tắc ATSH v4.0</p>
+                    </div>
+                    <span>{item.so_vi_pham} vi phạm</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="crossing-list__empty">Chưa tải được thống kê vi phạm ATSH.</p>
+          )}
         </article>
       </section>
 

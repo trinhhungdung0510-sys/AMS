@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -73,8 +73,14 @@ def list_zone_template() -> list[ZoneTemplateItemResponse]:
 
 
 @router.get("", response_model=list[ZonePolygonResponse])
-def list_zones(db: Session = Depends(get_db)) -> list[ZonePolygonResponse]:
-    zones = list(db.scalars(select(ZonePolygon).order_by(ZonePolygon.created_at.desc(), ZonePolygon.id)))
+def list_zones(
+    camera_id: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> list[ZonePolygonResponse]:
+    query = select(ZonePolygon).order_by(ZonePolygon.created_at.desc(), ZonePolygon.id)
+    if camera_id:
+        query = query.where(ZonePolygon.camera_id == camera_id)
+    zones = list(db.scalars(query))
     return [_to_response(zone) for zone in zones]
 
 
@@ -104,6 +110,8 @@ def create_zone(payload: ZonePolygonCreate, db: Session = Depends(get_db)) -> Zo
         zone_type=payload.zone_type,
         biosecurity_level=level,
         color=resolve_color(biosecurity_level=level, color=payload.color),
+        opacity=payload.opacity,
+        description=payload.description,
         polygon_points=payload.polygon_points,
         active=payload.active,
         created_at=datetime.now(timezone.utc).isoformat(),

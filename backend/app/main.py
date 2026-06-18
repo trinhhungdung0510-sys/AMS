@@ -27,11 +27,12 @@ from app.api.notifications import router as notifications_router
 from app.api.realtime import router as realtime_router
 from app.api.biosecurity_rules import router as biosecurity_rules_router
 from app.api.rules import router as rules_router
-from app.api.snapshots import router as snapshots_router
+from app.api.smart_farm import router as smart_farm_router
 from app.api.streams import router as streams_router
 from app.api.tasks import router as tasks_router
 from app.api.tracks import router as tracks_router
 from app.api.transitions import router as transitions_router
+from app.api.zone_transitions import router as zone_transitions_router
 from app.api.visitors import router as visitors_router
 from app.api.workflows import router as workflows_router
 from app.api.zones import router as zones_router
@@ -70,10 +71,12 @@ app.include_router(gateways_router, prefix=settings.api_prefix)
 app.include_router(map_router, prefix=settings.api_prefix)
 app.include_router(licenses_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
+app.include_router(smart_farm_router, prefix=settings.api_prefix)
 app.include_router(snapshots_router, prefix=settings.api_prefix)
 app.include_router(streams_router, prefix=settings.api_prefix)
 app.include_router(tasks_router, prefix=settings.api_prefix)
-app.include_router(transitions_router, prefix=settings.api_prefix)
+app.include_router(transitions_router, prefix=f"{settings.api_prefix}/transitions")
+app.include_router(zone_transitions_router, prefix=f"{settings.api_prefix}/zone-transitions")
 app.include_router(workflows_router, prefix=settings.api_prefix)
 app.include_router(zones_router, prefix=settings.api_prefix)
 app.include_router(employees_router, prefix=settings.api_prefix)

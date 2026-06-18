@@ -84,3 +84,8 @@ class WorkflowDashboardResponse(BaseModel):
     vi_pham_hom_nay: int
     top_quy_trinh_bi_vi_pham: list[dict]
     chi_tiet_hom_nay: list[dict]
+
+
+class WorkflowViolationType(BaseModel):
+    ma: str
+    ten: str

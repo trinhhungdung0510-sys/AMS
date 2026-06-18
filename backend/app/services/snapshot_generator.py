@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -139,14 +140,78 @@ def render_annotated_snapshot_bytes(annotation: SnapshotAnnotation) -> bytes:
     return buffer.getvalue()
 
 
-def _create_base_frame() -> Image.Image:
-    image = Image.new("RGB", (FRAME_WIDTH, FRAME_HEIGHT), (28, 72, 38))
+def render_camera_frame_bytes(
+    *,
+    camera_id: str,
+    camera_name: str,
+    zone: str,
+    status: str,
+    resolution: str,
+) -> bytes:
+    buffer = BytesIO()
+    render_camera_frame(
+        camera_id=camera_id,
+        camera_name=camera_name,
+        zone=zone,
+        status=status,
+        resolution=resolution,
+    ).save(buffer, format="JPEG", quality=90, optimize=True)
+    return buffer.getvalue()
+
+
+def render_camera_frame(
+    *,
+    camera_id: str,
+    camera_name: str,
+    zone: str,
+    status: str,
+    resolution: str,
+) -> Image.Image:
+    online = status.lower() == "online"
+    image = _create_base_frame(online=online, camera_name=camera_name, zone=zone)
+    draw = ImageDraw.Draw(image)
+    title_font = _load_font(26)
+    meta_font = _load_font(20)
+    small_font = _load_font(18)
+
+    stamp = _format_timestamp(datetime.now().isoformat())
+    status_color = (22, 163, 74) if online else (220, 38, 38)
+    status_text = "ĐANG HOẠT ĐỘNG · FRAME MỚI NHẤT" if online else "NGẮT KẾT NỐI"
+
+    draw.rectangle((0, 0, FRAME_WIDTH, 56), fill=(11, 107, 27))
+    draw.text((20, 14), camera_name, fill=(255, 255, 255), font=title_font)
+    draw.text((20, 42), f"{camera_id} · {zone} · {resolution}", fill=(187, 247, 208), font=small_font)
+
+    draw.rectangle((FRAME_WIDTH - 420, 12, FRAME_WIDTH - 16, 44), fill=status_color)
+    draw.text((FRAME_WIDTH - 404, 18), status_text, fill=(255, 255, 255), font=small_font)
+
+    if not online:
+        draw.rectangle((0, 56, FRAME_WIDTH, FRAME_HEIGHT - 42), fill=(15, 23, 42))
+        draw.text((FRAME_WIDTH // 2 - 180, FRAME_HEIGHT // 2 - 20), "Camera offline", fill=(248, 250, 252), font=title_font)
+
+    draw.rectangle((0, FRAME_HEIGHT - 42, FRAME_WIDTH, FRAME_HEIGHT), fill=(15, 23, 42))
+    draw.text((20, FRAME_HEIGHT - 30), f"AMS Zone Designer · {stamp}", fill=(148, 163, 184), font=meta_font)
+    return image
+
+
+def _create_base_frame(
+    *,
+    online: bool = True,
+    camera_name: str = "Camera Feed",
+    zone: str = "",
+) -> Image.Image:
+    base = (28, 72, 38) if online else (30, 41, 59)
+    grid = (34, 84, 48) if online else (51, 65, 85)
+    image = Image.new("RGB", (FRAME_WIDTH, FRAME_HEIGHT), base)
     draw = ImageDraw.Draw(image)
     for x in range(0, FRAME_WIDTH, 80):
-        draw.line((x, 0, x, FRAME_HEIGHT), fill=(34, 84, 48), width=1)
-    for y in range(0, FRAME_HEIGHT, 80):
-        draw.line((0, y, FRAME_WIDTH, y), fill=(34, 84, 48), width=1)
-    draw.text((48, 48), "Camera Feed", fill=(187, 247, 208), font=_load_font(24))
+        draw.line((x, 56, x, FRAME_HEIGHT - 42), fill=grid, width=1)
+    for y in range(56, FRAME_HEIGHT - 42, 80):
+        draw.line((0, y, FRAME_WIDTH, y), fill=grid, width=1)
+
+    accent = (243, 106, 16) if online else (100, 116, 139)
+    draw.rectangle((48, 120, FRAME_WIDTH - 48, FRAME_HEIGHT - 120), outline=accent, width=3)
+    draw.text((72, 88), zone or camera_name, fill=(187, 247, 208) if online else (203, 213, 225), font=_load_font(22))
     return image
 
 

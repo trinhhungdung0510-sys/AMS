@@ -51,3 +51,10 @@ class BiosecurityRuleResponse(BaseModel):
 class BiosecurityCategoryResponse(BaseModel):
     ma: str
     ten: str
+
+
+class FarmAreaTypeResponse(BaseModel):
+    ma_vung: str
+    ten_vi: str
+    ten_en: str
+    muc_atsh: str

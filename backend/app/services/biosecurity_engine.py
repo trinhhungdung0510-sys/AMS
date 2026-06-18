@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import BiosecurityRule, Camera, Event, FarmZone, ZoneTransition
+from app.services.atsh_biosecurity_engine import evaluate_atsh_biosecurity
 from app.services.audit import write_audit_log
 from app.services.snapshot_generator import SnapshotAnnotation, create_event_snapshot
 from app.services.vi_localization import build_email_alert, resolve_camera_name, resolve_farm_name, resolve_zone_name
@@ -13,11 +14,15 @@ DEFAULT_CAMERA_ID = "CAM-001"
 
 
 def evaluate_transition(db: Session, transition: ZoneTransition) -> Optional[dict]:
-    rule = _match_rule(db, transition)
+    atsh_violation = evaluate_atsh_biosecurity(db, transition)
+    if atsh_violation:
+        return atsh_violation
+
+    rule = _match_legacy_rule(db, transition)
     if not rule:
         return None
 
-    camera = db.get(Camera, DEFAULT_CAMERA_ID)
+    camera = db.get(Camera, transition.camera_id) or db.get(Camera, DEFAULT_CAMERA_ID)
     to_zone_meta = _lookup_zone_metadata(db, transition.to_zone)
     event_id = f"EVT-BIO-{uuid.uuid4().hex[:8].upper()}"
     snapshot_id = f"SNP-BIO-{uuid.uuid4().hex[:8].upper()}"
@@ -26,8 +31,8 @@ def evaluate_transition(db: Session, transition: ZoneTransition) -> Optional[dic
     event = Event(
         id=event_id,
         farm_id=camera.farm_id if camera else "FARM-001",
-        camera_id=camera.id if camera else DEFAULT_CAMERA_ID,
-        category=rule.rule_code.lower(),
+        camera_id=camera.id if camera else transition.camera_id,
+        category="atsh_violation",
         alert_type=alert_type,
         zone=transition.to_zone,
         severity=rule.severity,
@@ -35,6 +40,7 @@ def evaluate_transition(db: Session, transition: ZoneTransition) -> Optional[dic
         handler="Chưa phân công",
         confidence=99,
         occurred_at=transition.cross_time,
+        violation_code=rule.rule_code,
     )
     snapshot = create_event_snapshot(
         event_id=event_id,
@@ -89,7 +95,7 @@ def evaluate_transition(db: Session, transition: ZoneTransition) -> Optional[dic
     )
 
     return {
-        "type": "biosecurity_violation",
+        "type": "atsh_violation",
         "rule_id": rule.id,
         "rule_code": rule.rule_code,
         "ten_vi_pham": rule.rule_name_vi,
@@ -108,17 +114,19 @@ def evaluate_transition(db: Session, transition: ZoneTransition) -> Optional[dic
         "email": email_alert,
         "notification": {
             "email": True,
-            "telegram": rule.severity in {"critical", "high"},
-            "zalo": rule.severity == "critical",
+            "telegram": rule.severity in {"critical", "high", "CRITICAL"},
+            "zalo": rule.severity in {"critical", "CRITICAL"},
         },
     }
 
 
-def _match_rule(db: Session, transition: ZoneTransition) -> Optional[BiosecurityRule]:
+def _match_legacy_rule(db: Session, transition: ZoneTransition) -> Optional[BiosecurityRule]:
     rules = list(db.scalars(select(BiosecurityRule).where(BiosecurityRule.enabled.is_(True))))
     object_type = transition.object_type.lower()
 
     for rule in rules:
+        if rule.rule_type is not None:
+            continue
         if rule.object_type in (None, "catalog"):
             continue
         if rule.object_type.lower() != object_type:
