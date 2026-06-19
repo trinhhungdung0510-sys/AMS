@@ -7,3 +7,8 @@ export async function getCameras() {
   }
   return response.json()
 }
+
+export async function getCameraById(cameraId) {
+  const cameras = await getCameras()
+  return cameras.find((camera) => camera.id === cameraId) ?? null
+}

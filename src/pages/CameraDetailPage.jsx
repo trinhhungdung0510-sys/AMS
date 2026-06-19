@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import CameraFeed from '../components/CameraFeed'
 import ViolationCard from '../components/ViolationCard'
 import {
   alertTypeOptions,
-  getCameraById,
+  getCameraById as getMockCameraById,
   getEventsByCamera,
   getViolationImagesByCamera,
   severityLabels,
   statusLabels,
 } from '../data/mockData'
+import { mapApiEventToViolation, TODAY } from '../data/atshViolations'
+import { getCameraById } from '../services/cameraService'
+import { getEvents } from '../services/eventService'
 import { formatDateTime } from '../utils/formatters'
 
 const timeFilters = [
@@ -20,19 +23,116 @@ const timeFilters = [
   { value: 'month', label: '30 ngày' },
 ]
 
+const API_SEVERITY_TO_BADGE = {
+  CRITICAL: 'critical',
+  WARNING: 'warning',
+  INFO: 'info',
+}
+
+const API_STATUS_TO_UI = {
+  new: 'new',
+  confirmed: 'processing',
+  resolved: 'resolved',
+}
+
+function mapToAlert(violation) {
+  return {
+    id: violation.id,
+    time: violation.time,
+    date: violation.date,
+    typeLabel: violation.typeLabel,
+    type: violation.type,
+    severity: API_SEVERITY_TO_BADGE[violation.severity] || 'warning',
+    status: API_STATUS_TO_UI[violation.status] || violation.status,
+    confidence: violation.confidence,
+  }
+}
+
+function mapToImage(violation) {
+  return {
+    id: `IMG-${violation.id}`,
+    eventId: violation.id,
+    type: violation.type,
+    typeLabel: violation.typeLabel,
+    cameraId: violation.cameraId,
+    cameraName: violation.cameraName,
+    zone: violation.zone,
+    time: `${violation.date} ${violation.time}`,
+    confidence: violation.confidence,
+    severity: API_SEVERITY_TO_BADGE[violation.severity] || 'warning',
+    resolved: violation.status === 'resolved',
+  }
+}
+
 function CameraDetailPage() {
   const { cameraId } = useParams()
-  const camera = getCameraById(cameraId)
-  const alerts = useMemo(() => getEventsByCamera(cameraId), [cameraId])
-  const [images, setImages] = useState(() => getViolationImagesByCamera(cameraId))
+  const [camera, setCamera] = useState(null)
+  const [alerts, setAlerts] = useState([])
+  const [images, setImages] = useState([])
+  const [loading, setLoading] = useState(true)
   const [timeFilter, setTimeFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+
+      try {
+        const loadedCamera = await getCameraById(cameraId)
+        if (cancelled) return
+
+        if (!loadedCamera) {
+          setCamera(null)
+          setAlerts([])
+          setImages([])
+          return
+        }
+
+        setCamera(loadedCamera)
+
+        try {
+          const events = await getEvents()
+          if (cancelled) return
+
+          const violations = events
+            .map(mapApiEventToViolation)
+            .map((item) => ({ ...item, cameraId: loadedCamera.id }))
+            .filter((item) => item.cameraName === loadedCamera.name)
+
+          setAlerts(violations.map(mapToAlert))
+          setImages(violations.map(mapToImage))
+        } catch {
+          if (cancelled) return
+          setAlerts(getEventsByCamera(cameraId))
+          setImages(getViolationImagesByCamera(cameraId))
+        }
+      } catch {
+        if (cancelled) return
+        const mockCamera = getMockCameraById(cameraId)
+        setCamera(mockCamera)
+        if (mockCamera) {
+          setAlerts(getEventsByCamera(cameraId))
+          setImages(getViolationImagesByCamera(cameraId))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [cameraId])
+
   const filteredAlerts = useMemo(() => {
     let result = alerts
-    if (timeFilter === 'today') result = result.filter((alert) => alert.date === '2026-06-17')
-    if (timeFilter === 'week') result = result.filter((alert) => Number(alert.date.slice(-2)) >= 11)
-    if (timeFilter === 'month') result = result.filter((alert) => alert.date.startsWith('2026-06'))
+    if (timeFilter === 'today') result = result.filter((alert) => alert.date === TODAY)
+    if (timeFilter === 'week') result = result.filter((alert) => Number(alert.date.slice(-2)) >= 12)
+    if (timeFilter === 'month') result = result.filter((alert) => alert.date.startsWith(TODAY.slice(0, 7)))
     if (typeFilter !== 'all') {
       result = result.filter((alert) => alert.type === typeFilter)
     }
@@ -51,6 +151,14 @@ function CameraDetailPage() {
     )
   }
 
+  if (loading) {
+    return (
+      <div className="camera-detail camera-detail--empty">
+        <p>Đang tải thông tin camera...</p>
+      </div>
+    )
+  }
+
   if (!camera) {
     return (
       <div className="camera-detail camera-detail--empty">
@@ -59,6 +167,8 @@ function CameraDetailPage() {
       </div>
     )
   }
+
+  const cameraIp = camera.ip_address ?? camera.ip
 
   return (
     <div className="camera-detail">
@@ -72,16 +182,16 @@ function CameraDetailPage() {
           <span className={`status-pill status-pill--${camera.status}`}>
             {camera.status === 'online' ? 'Online' : 'Offline'}
           </span>
-          <span className="camera-detail__ip">{camera.ip}</span>
+          <span className="camera-detail__ip">{cameraIp}</span>
         </div>
       </div>
 
       <div className="camera-detail__layout">
         <section className="camera-detail__video-section">
-          <CameraFeed camera={camera} size="large" showActions />
+          <CameraFeed camera={camera} size="large" />
           <div className="info-grid">
             <div><span>ID camera</span><strong>{camera.id}</strong></div>
-            <div><span>IP camera</span><strong>{camera.ip}</strong></div>
+            <div><span>IP camera</span><strong>{cameraIp}</strong></div>
             <div><span>Khu vực</span><strong>{camera.zone}</strong></div>
             <div><span>Trạng thái</span><strong>{camera.status === 'online' ? 'Online' : 'Offline'}</strong></div>
             <div><span>Uptime</span><strong>{camera.uptime}%</strong></div>
