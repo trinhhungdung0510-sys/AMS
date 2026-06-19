@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { getWebSocketBaseUrl } from '../config/api'
 
-const WS_URL = 'ws://127.0.0.1:8000/ws/dashboard'
+const WS_URL = `${getWebSocketBaseUrl()}/ws/dashboard`
 
 export function useDashboardWebSocket(onMessage) {
   const [connected, setConnected] = useState(false)

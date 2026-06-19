@@ -22,8 +22,8 @@ import {
 } from '../data/mockData'
 
 import { LOGO_SRC } from '../components/BrandLogo'
+import { API_BASE_URL } from '../config/api'
 
-const API_BASE_URL = 'http://127.0.0.1:8000'
 const COLORS = ['#0B6B1B', '#F36A10', '#dc2626', '#facc15', '#64748b']
 
 const zoneLabels = {

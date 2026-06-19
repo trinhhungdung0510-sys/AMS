@@ -36,8 +36,7 @@ import {
 import { getDashboardMapFromDesigner, subscribeFarmMapUpdates } from '../data/farmMapSync'
 import { atshViolations, computeAtshKpis } from '../data/atshViolations'
 import { useDashboardWebSocket } from '../hooks/useDashboardWebSocket'
-
-const API_BASE_URL = 'http://127.0.0.1:8000'
+import { API_BASE_URL } from '../config/api'
 
 function formatTime(date) {
   if (!date) return '--'

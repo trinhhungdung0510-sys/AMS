@@ -1,4 +1,6 @@
-const API_BASE = 'http://127.0.0.1:8000/api/map'
+import { API_BASE_URL } from '../config/api'
+
+const API_BASE = `${API_BASE_URL}/api/map`
 
 export async function fetchActiveFarmMap() {
   const res = await fetch(`${API_BASE}/active`)

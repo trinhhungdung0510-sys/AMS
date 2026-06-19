@@ -28,6 +28,7 @@ from app.api.realtime import router as realtime_router
 from app.api.biosecurity_rules import router as biosecurity_rules_router
 from app.api.rules import router as rules_router
 from app.api.smart_farm import router as smart_farm_router
+from app.api.snapshots import router as snapshots_router
 from app.api.streams import router as streams_router
 from app.api.tasks import router as tasks_router
 from app.api.tracks import router as tracks_router
@@ -48,6 +49,10 @@ app.state.rtsp_task = None
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:5174"],
+    allow_origin_regex=(
+        r"https://.*\.trycloudflare\.com|"
+        r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

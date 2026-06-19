@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy import Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -8,7 +10,7 @@ class FarmMapObject(Base):
     __tablename__ = "farm_map_objects"
 
     id: Mapped[str] = mapped_column(String(20), primary_key=True, index=True)
-    layout_id: Mapped[str | None] = mapped_column(
+    layout_id: Mapped[Optional[str]] = mapped_column(
         String(20), ForeignKey("farm_map_layouts.id"), nullable=True, index=True
     )
     object_type: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -22,8 +24,8 @@ class FarmMapObject(Base):
     rotation: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     atsh_zone_type: Mapped[str] = mapped_column(String(30), nullable=False, default="buffer")
     atsh_level: Mapped[str] = mapped_column(String(20), nullable=False, default="green")
-    linked_camera_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    linked_zone_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    camera_direction: Mapped[float | None] = mapped_column(Float, nullable=True)
-    camera_fov: Mapped[float | None] = mapped_column(Float, nullable=True)
+    linked_camera_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    linked_zone_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    camera_direction: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    camera_fov: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
