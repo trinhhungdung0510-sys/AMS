@@ -1,51 +1,103 @@
-import { Camera, Maximize2, Radio, Video } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Camera, Radio } from 'lucide-react'
+import { apiFetch } from '../services/apiClient'
 
-function CameraFeed({ camera, size = 'tile', showActions = false }) {
+function CameraFeed({ camera, size = 'tile' }) {
   const isOnline = camera.status === 'online'
+  const [frameSrc, setFrameSrc] = useState('')
+  const [frameTick, setFrameTick] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!isOnline) return undefined
+
+    const timer = setInterval(() => setFrameTick(Date.now()), 15000)
+    return () => clearInterval(timer)
+  }, [isOnline, camera.id])
+
+  useEffect(() => {
+    if (!isOnline) {
+      setFrameSrc((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return ''
+      })
+      return undefined
+    }
+
+    let cancelled = false
+    let objectUrl = ''
+
+    async function loadFrame() {
+      try {
+        const response = await apiFetch(`/cameras/${camera.id}/frame?t=${frameTick}`)
+        if (!response.ok || cancelled) return
+
+        const blob = await response.blob()
+        objectUrl = URL.createObjectURL(blob)
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl)
+          return
+        }
+        setFrameSrc((prev) => {
+          if (prev) URL.revokeObjectURL(prev)
+          return objectUrl
+        })
+      } catch (error) {
+        console.error('Load camera frame failed', error)
+      }
+    }
+
+    loadFrame()
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [camera.id, isOnline, frameTick])
 
   return (
-    <div className={`camera-feed camera-feed--${size} camera-feed--${camera.status}`}>
-      <div className="camera-feed__scanline" />
-      <div className="camera-feed__noise" />
-
+    <div
+      className={`camera-feed camera-feed--${size} camera-feed--${camera.status}`}
+    >
       {isOnline ? (
         <>
+          {frameSrc ? (
+            <img
+              src={frameSrc}
+              alt={camera.name}
+              className="camera-feed__image"
+            />
+          ) : null}
+
           <div className="camera-feed__top">
             <span className="live-pill">
               <span className="live-pill__dot" />
               LIVE
             </span>
-            <span className="camera-feed__resolution">{camera.resolution}</span>
+
+            <span className="camera-feed__resolution">
+              {camera.resolution}
+            </span>
           </div>
-          <span className="camera-feed__time">{new Date().toLocaleTimeString('vi-VN')}</span>
-          <Camera className="camera-feed__watermark" size={size === 'large' ? 72 : 44} />
+
+          <span className="camera-feed__time">
+            {new Date().toLocaleTimeString('vi-VN')}
+          </span>
         </>
       ) : (
         <div className="camera-feed__offline">
-          <Camera size={size === 'large' ? 56 : 36} />
+          <Camera size={48} />
           <span>OFFLINE</span>
-        </div>
-      )}
-
-      {showActions && (
-        <div className="camera-feed__actions">
-          <button type="button" className="icon-btn icon-btn--dark" aria-label="Toàn màn hình">
-            <Maximize2 size={18} />
-          </button>
-          <button type="button" className="icon-btn icon-btn--dark" aria-label="Chụp ảnh hiện tại">
-            <Camera size={18} />
-          </button>
-          <button type="button" className="icon-btn icon-btn--record" aria-label="Ghi hình">
-            <Video size={18} />
-          </button>
         </div>
       )}
 
       {size === 'large' && isOnline && (
         <div className="camera-feed__bottom">
           <span>{camera.name}</span>
+
           <span>
-            <Radio size={14} /> {camera.fps} FPS
+            <Radio size={14} />
+            {' '}
+            {camera.fps} FPS
           </span>
         </div>
       )}
