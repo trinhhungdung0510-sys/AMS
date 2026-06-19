@@ -1,16 +1,43 @@
-import { cameras } from '../data/mockData'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { getCameras } from '../services/cameraService'
 
 function CameraPage() {
+  const [cameras, setCameras] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadCameras()
+  }, [])
+
+  async function loadCameras() {
+    try {
+      const data = await getCameras()
+      setCameras(data)
+    } catch (error) {
+      console.error('Load cameras failed', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return <section className="panel">Đang tải camera...</section>
+  }
+
   return (
     <section className="panel">
       <div className="panel__header">
         <div>
           <h2>Danh sách camera</h2>
-          <p>9 camera mẫu đang được AMS quản lý</p>
+          <p>{cameras.length} camera đang được AMS quản lý</p>
         </div>
-        <Link className="btn btn--primary" to="/monitoring">Mở giám sát</Link>
+
+        <Link className="btn btn--primary" to="/monitoring">
+          Mở giám sát
+        </Link>
       </div>
+
       <div className="table-wrapper">
         <table className="data-table">
           <thead>
@@ -23,25 +50,33 @@ function CameraPage() {
               <th>Độ phân giải</th>
               <th>Uptime</th>
               <th>FPS</th>
-              <th>Cảnh báo hôm nay</th>
+              <th>Active</th>
             </tr>
           </thead>
+
           <tbody>
             {cameras.map((camera) => (
               <tr key={camera.id}>
                 <td className="data-table__mono">{camera.id}</td>
                 <td className="data-table__desc">{camera.name}</td>
                 <td>{camera.zone}</td>
-                <td className="data-table__mono">{camera.ip}</td>
+                <td className="data-table__mono">{camera.ip_address}</td>
+
                 <td>
-                  <span className={`status-pill status-pill--${camera.status}`}>
-                    {camera.status === 'online' ? 'Online' : 'Offline'}
+                  <span
+                    className={`status-pill status-pill--${camera.status}`}
+                  >
+                    {camera.status}
                   </span>
                 </td>
+
                 <td>{camera.resolution}</td>
                 <td>{camera.uptime}%</td>
                 <td>{camera.fps}</td>
-                <td>{camera.alertsToday}</td>
+
+                <td>
+                  {camera.is_active ? '✅' : '❌'}
+                </td>
               </tr>
             ))}
           </tbody>
