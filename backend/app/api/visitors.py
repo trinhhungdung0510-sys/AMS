@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -16,7 +17,9 @@ from app.schemas.visitor import (
     VisitorUpdate,
 )
 
-router = APIRouter(prefix="/visitors", tags=["visitors"])
+router = APIRouter(prefix="/visitors", tags=["visitors"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 def _now_iso() -> str:

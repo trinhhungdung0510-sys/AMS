@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,7 +16,9 @@ from app.schemas.person_track import TrackDetailResponse
 from app.services.employee_tracking import enrich_track_response, link_track_to_employee, sync_tracks
 from app.services.workflow_engine import get_track_detail
 
-router = APIRouter(prefix="/tracks", tags=["camera-tracking"])
+router = APIRouter(prefix="/tracks", tags=["camera-tracking"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("", response_model=list[ObjectTrackResponse])

@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,7 +8,9 @@ from app.models import Camera
 from app.schemas.camera import CameraResponse
 from app.services.snapshot_generator import render_camera_frame_bytes
 
-router = APIRouter(prefix="/cameras", tags=["cameras"])
+router = APIRouter(prefix="/cameras", tags=["cameras"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("", response_model=list[CameraResponse])

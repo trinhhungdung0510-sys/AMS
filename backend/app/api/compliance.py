@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
@@ -9,7 +10,9 @@ from app.database.session import get_db
 from app.models import Camera, Event
 from app.services.vi_localization import resolve_camera_name, resolve_severity_label, resolve_zone_name
 
-router = APIRouter(prefix="/compliance", tags=["compliance"])
+router = APIRouter(prefix="/compliance", tags=["compliance"],
+    dependencies=[Depends(get_current_user)]
+)
 
 SEVERITY_PENALTY = {
     "critical": 8,

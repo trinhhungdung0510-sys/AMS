@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -26,7 +27,9 @@ from app.services.workflow_engine import (
     get_workflow_history,
 )
 
-router = APIRouter(prefix="/workflows", tags=["workflows"])
+router = APIRouter(prefix="/workflows", tags=["workflows"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 def _step_response(step: WorkflowStep) -> WorkflowStepResponse:

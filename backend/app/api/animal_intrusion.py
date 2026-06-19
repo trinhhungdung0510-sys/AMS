@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,7 +14,9 @@ from app.schemas.animal_intrusion import (
     AnimalIntrusionPolicyUpdate,
 )
 
-router = APIRouter(prefix="/animal-intrusion", tags=["animal-intrusion"])
+router = APIRouter(prefix="/animal-intrusion", tags=["animal-intrusion"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 def _get_policy_or_404(policy_id: str, db: Session) -> AnimalIntrusionPolicy:

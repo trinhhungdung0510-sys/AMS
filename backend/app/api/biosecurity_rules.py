@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -17,7 +18,9 @@ from app.schemas.biosecurity_rule import (
     FarmAreaTypeResponse,
 )
 
-router = APIRouter(prefix="/biosecurity-rules", tags=["biosecurity-rules"])
+router = APIRouter(prefix="/biosecurity-rules", tags=["biosecurity-rules"],
+    dependencies=[Depends(get_current_user)]
+)
 
 VN_TZ = timezone(timedelta(hours=7))
 

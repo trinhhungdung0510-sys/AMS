@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -11,7 +12,9 @@ from app.schemas.map import (
     FarmMapSaveRequest,
 )
 
-router = APIRouter(prefix="/map", tags=["farm-map"])
+router = APIRouter(prefix="/map", tags=["farm-map"],
+    dependencies=[Depends(get_current_user)]
+)
 
 DEFAULT_FARM_ID = "FARM-001"
 DEFAULT_LAYOUT_ID = "MAP-LAYOUT-001"

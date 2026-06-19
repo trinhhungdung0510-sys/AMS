@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -18,7 +19,9 @@ from app.services.biosecurity_engine import evaluate_transition
 from app.services.workflow_engine import evaluate_workflow
 from app.services.zone_crossing_engine import process_zone_crossing
 
-router = APIRouter(tags=["zone-transitions"])
+router = APIRouter(tags=["zone-transitions"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("", response_model=list[ZoneTransitionResponse])

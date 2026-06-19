@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 from collections import Counter, defaultdict
 
 from fastapi import APIRouter, Depends
@@ -15,7 +16,9 @@ from app.schemas.dashboard import (
 from app.services.atsh_biosecurity_engine import get_atsh_violation_summary
 from app.services.vi_localization import resolve_camera_name, resolve_zone_name
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("/summary", response_model=DashboardSummaryResponse)

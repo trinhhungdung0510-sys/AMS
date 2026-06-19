@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 import json
 import uuid
 from datetime import datetime, timezone
@@ -12,7 +13,9 @@ from app.models import AITask
 from app.schemas.task import AITaskResponse
 from app.services.alert_engine import process_ai_task
 
-router = APIRouter(prefix="/tasks", tags=["ai-tasks"])
+router = APIRouter(prefix="/tasks", tags=["ai-tasks"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("", response_model=list[AITaskResponse])

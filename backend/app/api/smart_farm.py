@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,7 +18,9 @@ from app.schemas.smart_farm import (
     parse_route_points,
 )
 
-router = APIRouter(prefix="/smart-farm", tags=["smart-farm-designer"])
+router = APIRouter(prefix="/smart-farm", tags=["smart-farm-designer"],
+    dependencies=[Depends(get_current_user)]
+)
 
 DEFAULT_FARM_ID = "FARM-001"
 DEFAULT_LAYOUT_ID = "SF-LAYOUT-001"

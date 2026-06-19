@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,7 +8,9 @@ from app.models import Event
 from app.schemas.event import EventResponse
 from app.services.vi_localization import event_to_vi_dict
 
-router = APIRouter(prefix="/events", tags=["events"])
+router = APIRouter(prefix="/events", tags=["events"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("", response_model=list[EventResponse])

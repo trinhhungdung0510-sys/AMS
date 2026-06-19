@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -12,7 +13,9 @@ from app.database.session import get_db
 from app.models import Employee
 from app.schemas.employee import EmployeeCreate, EmployeeResponse, EmployeeUpdate
 
-router = APIRouter(prefix="/employees", tags=["employees"])
+router = APIRouter(prefix="/employees", tags=["employees"],
+    dependencies=[Depends(get_current_user)]
+)
 settings = get_settings()
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 

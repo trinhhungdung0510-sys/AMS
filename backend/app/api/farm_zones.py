@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -8,7 +9,9 @@ from app.database.session import get_db
 from app.models import FarmZone
 from app.schemas.farm_template import FarmZoneResponse
 
-router = APIRouter(prefix="/farm-zones", tags=["farm-zones"])
+router = APIRouter(prefix="/farm-zones", tags=["farm-zones"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("", response_model=list[FarmZoneResponse])

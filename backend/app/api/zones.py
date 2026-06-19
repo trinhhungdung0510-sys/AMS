@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.api.deps import get_current_user
+
 import uuid
 from datetime import datetime, timezone
 
@@ -26,7 +28,9 @@ from app.services.zone_designer_engine import (
     zone_to_response_dict,
 )
 
-router = APIRouter(prefix="/zones", tags=["zone-designer"])
+router = APIRouter(prefix="/zones", tags=["zone-designer"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 def _get_zone_or_404(zone_id: str, db: Session) -> ZonePolygon:

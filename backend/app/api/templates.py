@@ -1,3 +1,4 @@
+from app.api.deps import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -11,7 +12,9 @@ from app.schemas.farm_template import (
     TemplateZoneDefinitionResponse,
 )
 
-router = APIRouter(prefix="/templates", tags=["farm-templates"])
+router = APIRouter(prefix="/templates", tags=["farm-templates"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("", response_model=list[FarmLayoutTemplateSummaryResponse])
