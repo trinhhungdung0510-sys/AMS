@@ -12,10 +12,16 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "ams-dev-secret-change-me"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    cors_origins: str = (
+        "http://localhost:5173,http://localhost:5174,https://ams-rust-gamma.vercel.app"
+    )
     employee_storage_dir: str = "storage/employees"
     storage_root: str = "storage"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

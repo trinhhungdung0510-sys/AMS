@@ -1541,6 +1541,13 @@
   font-weight: 800;
 }
 
+.login-form__error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .login-form__field input {
   min-height: 44px;
   padding: 0 14px;

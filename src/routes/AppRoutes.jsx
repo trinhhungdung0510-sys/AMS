@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useParams } from 'react-router-dom'
+import ProtectedRoute from '../components/auth/ProtectedRoute'
 import AppLayout from '../layouts/AppLayout'
 import AtshRulesPage from '../pages/AtshRulesPage'
 import CameraDetailPage from '../pages/CameraDetailPage'
@@ -23,11 +24,19 @@ function FarmMapRedirect() {
   return <Navigate to="/bang-dieu-khien?tab=ban-do" replace />
 }
 
+function ProtectedAppLayout() {
+  return (
+    <ProtectedRoute>
+      <AppLayout />
+    </ProtectedRoute>
+  )
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route element={<AppLayout />}>
+      <Route element={<ProtectedAppLayout />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/bang-dieu-khien" element={<FarmControlDashboardPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
