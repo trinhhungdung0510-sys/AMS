@@ -1,33 +1,58 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CameraFeed from '../components/CameraFeed'
-import { cameras } from '../data/mockData'
-
-const zoneFilters = ['Tất cả khu vực', 'Cổng trại', 'Khu nái', 'Khu đực giống', 'Khu cách ly']
+import { getCameras } from '../services/cameraService'
 
 function MonitoringPage() {
+  const [cameras, setCameras] = useState([])
   const [zoneFilter, setZoneFilter] = useState('Tất cả khu vực')
 
+  useEffect(() => {
+    loadCameras()
+
+    const timer = setInterval(loadCameras, 10000)
+
+    return () => clearInterval(timer)
+  }, [])
+
+  async function loadCameras() {
+    try {
+      const data = await getCameras()
+      setCameras(data)
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  const zones = useMemo(() => {
+    return [
+      'Tất cả khu vực',
+      ...new Set(cameras.map((camera) => camera.zone)),
+    ]
+  }, [cameras])
+
   const filteredCameras = useMemo(() => {
-    if (zoneFilter === 'Tất cả khu vực') return cameras
-    return cameras.filter((camera) => camera.zone === zoneFilter)
-  }, [zoneFilter])
+    if (zoneFilter === 'Tất cả khu vực') {
+      return cameras
+    }
+
+    return cameras.filter(
+      (camera) => camera.zone === zoneFilter
+    )
+  }, [cameras, zoneFilter])
 
   return (
     <div className="monitoring-page">
-      <div className="toolbar">
-        <div className="toolbar__left">
-          <span className="toolbar__count">Lưới camera 3x3</span>
-          <span className="toolbar__divider" />
-          <span className="toolbar__meta">{filteredCameras.length} camera hiển thị</span>
-        </div>
-        <div className="toolbar__right">
+
+      <div className="panel">
+        <div className="panel__header">
+          <h2>Giám sát Camera</h2>
+
           <select
-            className="toolbar__select"
             value={zoneFilter}
-            onChange={(event) => setZoneFilter(event.target.value)}
+            onChange={(e) => setZoneFilter(e.target.value)}
           >
-            {zoneFilters.map((zone) => (
+            {zones.map((zone) => (
               <option key={zone} value={zone}>
                 {zone}
               </option>
@@ -38,21 +63,29 @@ function MonitoringPage() {
 
       <div className="monitoring-grid">
         {filteredCameras.map((camera) => (
-          <Link key={camera.id} to={`/monitoring/${camera.id}`} className="monitor-card">
+          <Link
+            key={camera.id}
+            to={`/monitoring/${camera.id}`}
+            className="monitor-card"
+          >
             <CameraFeed camera={camera} />
+
             <div className="monitor-card__body">
+              <h3>{camera.name}</h3>
+
+              <p>{camera.zone}</p>
+
               <div>
-                <h3>{camera.name}</h3>
-                <p>{camera.zone}</p>
+                {camera.status}
+                {' | '}
+                {camera.resolution}
+                {' | '}
+                {camera.fps} FPS
               </div>
-              <span className={`status-pill status-pill--${camera.status}`}>
-                {camera.status === 'online' ? 'LIVE' : 'OFFLINE'}
-              </span>
-            </div>
-            <div className="monitor-card__meta">
-              <span>{camera.resolution}</span>
-              <span>Uptime {camera.uptime}%</span>
-              <span>{camera.alertsToday} cảnh báo</span>
+
+              <div>
+                Uptime: {camera.uptime}%
+              </div>
             </div>
           </Link>
         ))}
