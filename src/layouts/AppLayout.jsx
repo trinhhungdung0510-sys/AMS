@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
+import { useAuth } from '../context/AuthContext'
 import { getCameraById, pageMeta } from '../data/mockData'
 
 function getPageMeta(pathname, search) {
@@ -60,15 +61,27 @@ function getPageMeta(pathname, search) {
 function AppLayout() {
   const location = useLocation()
   const meta = getPageMeta(location.pathname, location.search)
+  const { user, logout } = useAuth()
 
   return (
     <div className="app-shell">
       <Sidebar />
       <div className="app-main">
-        <Header title={meta.title} subtitle={meta.subtitle} />
+        <div className="app-header-wrapper">
+          <Header title={meta.title} subtitle={meta.subtitle} />
+
+          <div className="user-panel">
+            <span>{user?.full_name || user?.email}</span>
+            <button type="button" className="logout-button" onClick={logout}>
+              Đăng xuất
+            </button>
+          </div>
+        </div>
+
         <main className="page-content">
           <Outlet />
         </main>
+
         <footer className="app-footer">
           <p>© 2026 TIN NGHIA AMS</p>
           <p>AI Monitoring Technology Agriculture</p>
