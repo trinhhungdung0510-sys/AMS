@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { subscribeWsEvents } from '../services/wsClient'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useEventStore } from '../context/EventStore'
 
 const NotificationContext = createContext(null)
 const TOAST_TTL_MS = 8000
@@ -7,15 +7,15 @@ const TOAST_TTL_MS = 8000
 function buildEventToast(event) {
   return {
     id: event.id || `evt-${Date.now()}`,
-    tone: (event.severity || 'MEDIUM').toLowerCase(),
-    title: event.event_type || event.alert_type || 'Sự kiện',
-    message: `${event.zone_name || event.zone_id || event.camera_id || 'Zone'} · ${event.camera_name || event.camera_id || ''}`.trim(),
+    tone: (event.severityRaw || event.severity || 'MEDIUM').toLowerCase(),
+    title: event.typeLabel || event.eventType || 'Sự kiện',
+    message: `${event.zoneName || event.zoneId || event.cameraId || 'Zone'} · ${event.cameraName || event.cameraId || ''}`.trim(),
   }
 }
 
 function buildNotificationToast(notification) {
   return {
-    id: notification.eventId || `ntf-${Date.now()}`,
+    id: notification.eventId || notification.id || `ntf-${Date.now()}`,
     tone: (notification.severity || 'MEDIUM').toLowerCase(),
     title: notification.eventType || notification.type || 'Thông báo',
     message: notification.message || 'Có sự kiện mới từ hệ thống AI',
@@ -23,9 +23,14 @@ function buildNotificationToast(notification) {
 }
 
 export function NotificationProvider({ children }) {
+  const { lastWsEvent, lastNotification } = useEventStore()
   const [toasts, setToasts] = useState([])
+  const seenToastIds = useRef(new Set())
 
   const pushToast = useCallback((toast) => {
+    if (seenToastIds.current.has(toast.id)) return
+    seenToastIds.current.add(toast.id)
+
     setToasts((current) => [toast, ...current.filter((item) => item.id !== toast.id)].slice(0, 5))
     setTimeout(() => {
       setToasts((current) => current.filter((item) => item.id !== toast.id))
@@ -37,27 +42,18 @@ export function NotificationProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    return subscribeWsEvents({
-      onMessage: (payload) => {
-        if (payload.type === 'event.created') {
-          const event = payload.payload?.event
-          if (!event) return
-          const toast = buildEventToast(event)
-          pushToast(toast)
-          notify({ type: 'event_created', ...event, message: toast.message })
-          return
-        }
+    if (!lastWsEvent?.id) return
+    const toast = buildEventToast(lastWsEvent)
+    pushToast(toast)
+    notify({ type: 'event_created', ...lastWsEvent, message: toast.message })
+  }, [lastWsEvent, notify, pushToast])
 
-        if (payload.type === 'notification.created') {
-          const notification = payload.payload?.notification
-          if (!notification) return
-          const toast = buildNotificationToast(notification)
-          pushToast(toast)
-          notify({ type: 'notification_created', ...notification })
-        }
-      },
-    })
-  }, [notify, pushToast])
+  useEffect(() => {
+    if (!lastNotification) return
+    const toast = buildNotificationToast(lastNotification)
+    pushToast(toast)
+    notify({ type: 'notification_created', ...lastNotification })
+  }, [lastNotification, notify, pushToast])
 
   const dismissToast = useCallback((id) => {
     setToasts((current) => current.filter((item) => item.id !== id))

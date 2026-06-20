@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { useEventStore } from '../../context/EventStore'
 
 function formatEventTime(event) {
@@ -10,14 +9,11 @@ function formatEventTime(event) {
 
 function RealtimeEventFeed({ limit = 50, filterCameraId = null }) {
   const { feedEvents, connected, loading, error, reload } = useEventStore()
-  const [items, setItems] = useState([])
 
-  useEffect(() => {
-    const filtered = filterCameraId
-      ? feedEvents.filter((item) => item.cameraId === filterCameraId)
-      : feedEvents
-    setItems(filtered.slice(0, limit))
-  }, [feedEvents, filterCameraId, limit])
+  const items = (filterCameraId
+    ? feedEvents.filter((item) => item.cameraId === filterCameraId)
+    : feedEvents
+  ).slice(0, limit)
 
   return (
     <aside className="realtime-feed panel panel--compact">

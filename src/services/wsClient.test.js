@@ -7,10 +7,12 @@ describe('WsClient', () => {
     expect(client.url).toContain('/ws/events')
   })
 
-  it('registers and removes listeners', () => {
+  it('registers and removes listeners and replays connect state', () => {
     const client = new WsClient('/ws/events')
-    const handler = { onMessage: vi.fn() }
+    const handler = { onConnect: vi.fn(), onMessage: vi.fn() }
+    client.socket = { readyState: WebSocket.OPEN }
     const unsubscribe = client.subscribe(handler)
+    expect(handler.onConnect).toHaveBeenCalled()
     client.listeners.forEach((listener) => listener.onMessage?.({ type: 'heartbeat' }))
     expect(handler.onMessage).toHaveBeenCalled()
     unsubscribe()

@@ -59,11 +59,12 @@ export function normalizeApiEvent(event) {
   const { date, time, occurredAt } = parseOccurredParts(event.thoi_gian)
   const { severityRaw, severity } = normalizeSeverity(event.muc_do)
   const { statusRaw, status } = normalizeStatus(event.trang_thai)
+  const typeLabel = event.ten_vi_pham || event.event_type || 'Sự kiện'
 
   return {
     id: event.id,
-    eventType: event.ten_vi_pham,
-    typeLabel: event.ten_vi_pham,
+    eventType: typeLabel,
+    typeLabel,
     cameraId: '',
     cameraName: event.ten_camera,
     zoneId: '',
@@ -82,19 +83,28 @@ export function normalizeApiEvent(event) {
   }
 }
 
+export function resolveEventId(event) {
+  if (!event) return null
+  return event.id || event.event_id || event.eventId || null
+}
+
 export function normalizeEngineEvent(event) {
-  const occurred = event.started_at || event.created_at || event.occurred_at
+  const id = resolveEventId(event)
+  if (!id) return null
+
+  const occurred = event.started_at || event.created_at || event.occurred_at || event.thoi_gian
   const { date, time, occurredAt } = parseOccurredParts(occurred)
-  const { severityRaw, severity } = normalizeSeverity(event.severity)
-  const { statusRaw, status } = normalizeStatus(event.status)
-  const confidence = event.confidence != null
-    ? Math.round(Number(event.confidence) * (Number(event.confidence) <= 1 ? 100 : 1))
+  const { severityRaw, severity } = normalizeSeverity(event.severity || event.muc_do)
+  const { statusRaw, status } = normalizeStatus(event.status || event.trang_thai)
+  const rawConfidence = event.confidence ?? event.confidence_score ?? event.do_tin_cay
+  const confidence = rawConfidence != null
+    ? Math.round(Number(rawConfidence) * (Number(rawConfidence) <= 1 ? 100 : 1))
     : 0
 
   return {
-    id: event.id,
-    eventType: event.event_type || event.alert_type,
-    typeLabel: event.event_type || event.rule_name || event.alert_type || 'Sự kiện',
+    id,
+    eventType: event.event_type || event.eventType || event.alert_type || event.ten_vi_pham,
+    typeLabel: event.event_type || event.eventType || event.rule_name || event.alert_type || event.ten_vi_pham || 'Sự kiện',
     cameraId: event.camera_id,
     cameraName: event.camera_name || event.camera_id,
     zoneId: event.zone_id,
@@ -115,16 +125,35 @@ export function normalizeEngineEvent(event) {
 }
 
 export function normalizeWsPayload(payload) {
-  const data = payload?.payload || payload
-  const event = data?.event
-  if (!event?.id) return null
-  return normalizeEngineEvent(event)
+  if (!payload) return null
+
+  const data = payload.payload ?? payload.data ?? payload
+  const rawEvent = data?.event ?? (resolveEventId(data) ? data : null)
+  if (!rawEvent) return null
+
+  return normalizeEngineEvent(rawEvent)
+}
+
+export function sortEventsByTime(events) {
+  return [...events].sort((left, right) => {
+    const leftTs = Date.parse(left.occurredAt || `${left.date}T${left.time || '00:00'}`) || 0
+    const rightTs = Date.parse(right.occurredAt || `${right.date}T${right.time || '00:00'}`) || 0
+    return rightTs - leftTs
+  })
 }
 
 export function upsertEvent(events, incoming) {
   if (!incoming?.id) return events
   const without = events.filter((item) => item.id !== incoming.id)
-  return [incoming, ...without]
+  return sortEventsByTime([incoming, ...without])
+}
+
+export function mergeEventLists(primary = [], secondary = []) {
+  const merged = new Map()
+  ;[...secondary, ...primary].forEach((event) => {
+    if (event?.id) merged.set(event.id, event)
+  })
+  return sortEventsByTime([...merged.values()])
 }
 
 export function isToday(isoDate, today = new Date().toISOString().slice(0, 10)) {

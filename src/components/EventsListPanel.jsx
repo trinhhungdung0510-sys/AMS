@@ -18,10 +18,10 @@ function EventsListPanel() {
     const query = search.trim().toLowerCase()
     const matchSearch =
       query === '' ||
-      event.typeLabel.toLowerCase().includes(query) ||
-      event.cameraName.toLowerCase().includes(query) ||
-      (event.zoneName || '').toLowerCase().includes(query) ||
-      event.handler.toLowerCase().includes(query)
+      String(event.typeLabel || event.eventType || '').toLowerCase().includes(query) ||
+      String(event.cameraName || '').toLowerCase().includes(query) ||
+      String(event.zoneName || '').toLowerCase().includes(query) ||
+      String(event.handler || '').toLowerCase().includes(query)
 
     const matchTime =
       timeFilter === 'all' ||

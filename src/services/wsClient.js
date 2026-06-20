@@ -19,6 +19,48 @@ export class WsClient {
     return `${getWebSocketBaseUrl()}${this.path}`
   }
 
+  isConnected() {
+    return this.socket?.readyState === WebSocket.OPEN
+  }
+
+  notifyConnect() {
+    this.onConnect?.()
+    this.listeners.forEach((listener) => {
+      try {
+        listener.onConnect?.()
+      } catch (error) {
+        console.error('[AMS WS] onConnect listener failed', error)
+      }
+    })
+  }
+
+  notifyDisconnect() {
+    this.onDisconnect?.()
+    this.listeners.forEach((listener) => {
+      try {
+        listener.onDisconnect?.()
+      } catch (error) {
+        console.error('[AMS WS] onDisconnect listener failed', error)
+      }
+    })
+  }
+
+  dispatchMessage(payload) {
+    try {
+      this.onMessage?.(payload)
+    } catch (error) {
+      console.error('[AMS WS] root onMessage failed', error)
+    }
+
+    this.listeners.forEach((listener) => {
+      try {
+        listener.onMessage?.(payload)
+      } catch (error) {
+        console.error('[AMS WS] listener onMessage failed', error)
+      }
+    })
+  }
+
   connect() {
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return
@@ -28,30 +70,28 @@ export class WsClient {
 
     try {
       this.socket = new WebSocket(this.url)
-    } catch {
+    } catch (error) {
+      console.error('[AMS WS] connect failed', error)
       this.scheduleReconnect()
       return
     }
 
     this.socket.onopen = () => {
       this.reconnectMs = DEFAULT_RECONNECT_MS
-      this.onConnect?.()
-      this.listeners.forEach((listener) => listener.onConnect?.())
+      this.notifyConnect()
     }
 
     this.socket.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data)
-        this.onMessage?.(payload)
-        this.listeners.forEach((listener) => listener.onMessage?.(payload))
-      } catch {
-        // ignore malformed payloads
+        this.dispatchMessage(payload)
+      } catch (error) {
+        console.error('[AMS WS] malformed payload', error, event.data)
       }
     }
 
     this.socket.onclose = () => {
-      this.onDisconnect?.()
-      this.listeners.forEach((listener) => listener.onDisconnect?.())
+      this.notifyDisconnect()
       this.scheduleReconnect()
     }
 
@@ -70,6 +110,9 @@ export class WsClient {
 
   subscribe(listener) {
     this.listeners.add(listener)
+    if (this.isConnected()) {
+      listener.onConnect?.()
+    }
     return () => this.listeners.delete(listener)
   }
 

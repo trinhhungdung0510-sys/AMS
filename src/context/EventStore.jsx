@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useAuth } from './AuthContext'
@@ -12,14 +13,22 @@ import { apiFetch } from '../services/apiClient'
 import { subscribeWsEvents } from '../services/wsClient'
 import {
   computeEventMetrics,
+  mergeEventLists,
   normalizeApiEvent,
   normalizeWsPayload,
+  sortEventsByTime,
   upsertEvent,
 } from '../utils/eventNormalizer'
 
 const EventStoreContext = createContext(null)
 const MAX_EVENTS = 500
 const FEED_LIMIT = 50
+
+function logWs(label, payload) {
+  if (import.meta.env.DEV) {
+    console.info(label, payload)
+  }
+}
 
 export function EventStoreProvider({ children }) {
   const { user, loading: authLoading } = useAuth()
@@ -28,15 +37,26 @@ export function EventStoreProvider({ children }) {
   const [connected, setConnected] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [lastWsEvent, setLastWsEvent] = useState(null)
+  const [lastNotification, setLastNotification] = useState(null)
+  const reloadVersionRef = useRef(0)
 
-  const applyEvent = useCallback((incoming) => {
+  const applyEvent = useCallback((incoming, { fromWs = false } = {}) => {
     if (!incoming?.id) return
-    setEvents((current) => upsertEvent(current, incoming).slice(0, MAX_EVENTS))
+
+    setEvents((current) => sortEventsByTime(upsertEvent(current, incoming)).slice(0, MAX_EVENTS))
+
+    if (fromWs) {
+      setLastWsEvent(incoming)
+    }
   }, [])
 
   const reload = useCallback(async () => {
+    const reloadVersion = reloadVersionRef.current + 1
+    reloadVersionRef.current = reloadVersion
     setLoading(true)
     setError(null)
+
     try {
       const [eventsData, cameraRes] = await Promise.all([
         getEvents(),
@@ -48,13 +68,22 @@ export function EventStoreProvider({ children }) {
       }
 
       const cameraData = await cameraRes.json()
-      const normalizedEvents = eventsData.map(normalizeApiEvent)
-      setEvents(normalizedEvents.slice(0, MAX_EVENTS))
-      setCameras(cameraData)
+      const normalizedEvents = (Array.isArray(eventsData) ? eventsData : []).map(normalizeApiEvent)
+
+      if (reloadVersionRef.current !== reloadVersion) {
+        return
+      }
+
+      setEvents((current) => mergeEventLists(normalizedEvents, current).slice(0, MAX_EVENTS))
+      setCameras(Array.isArray(cameraData) ? cameraData : [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không tải được sự kiện')
+      if (reloadVersionRef.current === reloadVersion) {
+        setError(err instanceof Error ? err.message : 'Không tải được sự kiện')
+      }
     } finally {
-      setLoading(false)
+      if (reloadVersionRef.current === reloadVersion) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -65,6 +94,8 @@ export function EventStoreProvider({ children }) {
       setCameras([])
       setLoading(false)
       setError(null)
+      setLastWsEvent(null)
+      setLastNotification(null)
       return
     }
     reload()
@@ -77,9 +108,29 @@ export function EventStoreProvider({ children }) {
       onConnect: () => setConnected(true),
       onDisconnect: () => setConnected(false),
       onMessage: (payload) => {
-        if (payload.type === 'event.created' || payload.type === 'event.updated') {
+        logWs('[WS RAW]', payload)
+        logWs('[WS TYPE]', payload?.type)
+
+        if (payload?.type === 'event.created' || payload?.type === 'event.updated') {
           const normalized = normalizeWsPayload(payload)
-          if (normalized) applyEvent(normalized)
+          logWs('[WS PAYLOAD]', normalized)
+
+          if (normalized) {
+            applyEvent(normalized, { fromWs: true })
+            return
+          }
+
+          if (import.meta.env.DEV) {
+            console.warn('[WS PAYLOAD] normalizeWsPayload returned null', payload)
+          }
+          return
+        }
+
+        if (payload?.type === 'notification.created') {
+          const notification = payload.payload?.notification ?? payload.payload
+          if (notification) {
+            setLastNotification(notification)
+          }
         }
       },
     })
@@ -103,8 +154,10 @@ export function EventStoreProvider({ children }) {
       error,
       reload,
       applyEvent,
+      lastWsEvent,
+      lastNotification,
     }),
-    [events, feedEvents, cameras, metrics, connected, loading, error, reload, applyEvent],
+    [events, feedEvents, cameras, metrics, connected, loading, error, reload, applyEvent, lastWsEvent, lastNotification],
   )
 
   return (

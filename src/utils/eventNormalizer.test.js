@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeEventMetrics,
+  mergeEventLists,
   normalizeApiEvent,
   normalizeEngineEvent,
   normalizeWsPayload,
+  resolveEventId,
   upsertEvent,
 } from './eventNormalizer'
 
@@ -82,6 +84,33 @@ describe('eventNormalizer', () => {
     const events = upsertEvent([], normalized)
 
     expect(events[0].eventType).toBe('ANIMAL_ENTER')
+  })
+
+  it('resolves alternate event id fields from websocket payload', () => {
+    const payload = {
+      type: 'event.created',
+      payload: {
+        event: {
+          event_id: 'EVT-ALT-1',
+          event_type: 'PERSON_ENTER',
+          severity: 'HIGH',
+          status: 'OPEN',
+          started_at: '2026-06-20T12:00:00+00:00',
+        },
+      },
+    }
+
+    expect(resolveEventId(payload.payload.event)).toBe('EVT-ALT-1')
+    expect(normalizeWsPayload(payload)?.id).toBe('EVT-ALT-1')
+  })
+
+  it('merges api reload with websocket-only events', () => {
+    const merged = mergeEventLists(
+      [{ id: 'A', occurredAt: '2026-06-20T10:00:00+00:00' }],
+      [{ id: 'B', occurredAt: '2026-06-20T11:00:00+00:00' }],
+    )
+
+    expect(merged.map((item) => item.id)).toEqual(['B', 'A'])
   })
 
   it('computes dashboard metrics', () => {
