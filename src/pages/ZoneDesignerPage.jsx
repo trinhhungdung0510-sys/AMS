@@ -27,6 +27,7 @@ import {
   ZONE_CATEGORIES,
   categoryMeta,
   defaultRulesForCategory,
+  mapCameraToDesigner,
   mapZoneFromApi,
 } from '../data/zoneDesignerPro'
 import {
@@ -43,15 +44,24 @@ import {
   toPoints,
   translatePoints,
 } from '../data/zoneDesignerGeometry'
-import { cameras } from '../data/mockData'
-import { API_BASE_URL } from '../config/api'
+import { getCameras } from '../services/cameraService'
+import { getFarms } from '../services/farmService'
+import { apiFetch } from '../services/apiClient'
+import {
+  createZone,
+  deleteZone as deleteZoneApi,
+  listZones,
+  updateZone,
+} from '../services/zoneService'
 
 function ZoneDesignerPage() {
   const canvasRef = useRef(null)
   const viewportRef = useRef(null)
   const [farmFilter, setFarmFilter] = useState('all')
   const [cameraSearch, setCameraSearch] = useState('')
-  const [selectedCameraId, setSelectedCameraId] = useState(DESIGNER_CAMERAS[0].id)
+  const [designerCameras, setDesignerCameras] = useState(DESIGNER_CAMERAS)
+  const [farms, setFarms] = useState(FARMS)
+  const [selectedCameraId, setSelectedCameraId] = useState(DESIGNER_CAMERAS[0]?.id ?? null)
   const [zones, setZones] = useState([])
   const [flows, setFlows] = useState([])
   const [selectedZoneId, setSelectedZoneId] = useState(null)
@@ -78,20 +88,16 @@ function ZoneDesignerPage() {
   const [historyPast, setHistoryPast] = useState([])
   const [historyFuture, setHistoryFuture] = useState([])
   const [frameTick, setFrameTick] = useState(0)
+  const [frameSrc, setFrameSrc] = useState('')
 
   const selectedCamera = useMemo(
-    () => DESIGNER_CAMERAS.find((item) => item.id === selectedCameraId) ?? DESIGNER_CAMERAS[0],
-    [selectedCameraId],
-  )
-
-  const cameraMeta = useMemo(
-    () => cameras.find((item) => item.id === selectedCameraId) ?? cameras[0],
-    [selectedCameraId],
+    () => designerCameras.find((item) => item.id === selectedCameraId) ?? designerCameras[0],
+    [designerCameras, selectedCameraId],
   )
 
   const filteredCameras = useMemo(() => {
     const query = cameraSearch.trim().toLowerCase()
-    return DESIGNER_CAMERAS.filter((camera) => {
+    return designerCameras.filter((camera) => {
       const matchFarm = farmFilter === 'all' || camera.farmId === farmFilter
       const matchSearch =
         query === ''
@@ -100,7 +106,7 @@ function ZoneDesignerPage() {
         || camera.id.toLowerCase().includes(query)
       return matchFarm && matchSearch
     })
-  }, [cameraSearch, farmFilter])
+  }, [cameraSearch, designerCameras, farmFilter])
 
   const selectedZone = useMemo(
     () => zones.find((zone) => zone.id === selectedZoneId),
@@ -108,7 +114,41 @@ function ZoneDesignerPage() {
   )
 
   const selectedCategory = categoryMeta(zoneCategory)
-  const frameUrl = `${API_BASE_URL}/api/cameras/${selectedCameraId}/frame?t=${frameTick}`
+  const cameraStatus = selectedCamera?.status ?? 'offline'
+  const cameraResolution = selectedCamera?.resolution ?? `${CANVAS_WIDTH}x${CANVAS_HEIGHT}`
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadCatalog() {
+      try {
+        const [camerasData, farmsData] = await Promise.all([
+          getCameras().catch(() => []),
+          getFarms().catch(() => []),
+        ])
+        if (cancelled) return
+
+        if (camerasData.length) {
+          setDesignerCameras(camerasData.map(mapCameraToDesigner))
+          setSelectedCameraId((current) => current ?? camerasData[0].id)
+        }
+
+        if (farmsData.length) {
+          setFarms(farmsData.map((farm) => ({ id: farm.id, name: farm.name })))
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setApiStatus(`Không tải được danh mục: ${error.message}`)
+        }
+      }
+    }
+
+    loadCatalog()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const makeSnapshot = useCallback(
     () => ({ zones, flows }),
@@ -121,11 +161,11 @@ function ZoneDesignerPage() {
   }, [makeSnapshot])
 
   const loadZones = useCallback(async (cameraId) => {
+    if (!cameraId) return
+
     try {
       setApiStatus('Đang tải vùng ATSH...')
-      const response = await fetch(`${API_BASE_URL}/api/zones?camera_id=${encodeURIComponent(cameraId)}`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
+      const data = await listZones(cameraId)
       const cameraZones = data.map(mapZoneFromApi)
       setZones(cameraZones)
       setSelectedZoneId(cameraZones[0]?.id ?? null)
@@ -138,6 +178,7 @@ function ZoneDesignerPage() {
   }, [])
 
   useEffect(() => {
+    if (!selectedCameraId) return undefined
     loadZones(selectedCameraId)
     setDraftPoints([])
     setDraftLinePoints([])
@@ -150,10 +191,56 @@ function ZoneDesignerPage() {
   }, [selectedCameraId, loadZones])
 
   useEffect(() => {
-    if (cameraMeta.status !== 'online') return undefined
+    if (cameraStatus !== 'online' || !selectedCameraId) return undefined
     const timer = setInterval(() => setFrameTick(Date.now()), 15000)
     return () => clearInterval(timer)
-  }, [cameraMeta.status, selectedCameraId])
+  }, [cameraStatus, selectedCameraId])
+
+  useEffect(() => {
+    if (cameraStatus !== 'online' || !selectedCameraId) {
+      setFrameSrc((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return ''
+      })
+      return undefined
+    }
+
+    let cancelled = false
+    let objectUrl = ''
+
+    async function loadFrame() {
+      try {
+        const response = await apiFetch(`/cameras/${selectedCameraId}/frame?t=${frameTick}`)
+        if (!response.ok || cancelled) return
+
+        const blob = await response.blob()
+        objectUrl = URL.createObjectURL(blob)
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl)
+          return
+        }
+
+        setFrameSrc((prev) => {
+          if (prev) URL.revokeObjectURL(prev)
+          return objectUrl
+        })
+      } catch {
+        if (!cancelled) {
+          setFrameSrc((prev) => {
+            if (prev) URL.revokeObjectURL(prev)
+            return ''
+          })
+        }
+      }
+    }
+
+    loadFrame()
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [cameraStatus, frameTick, selectedCameraId])
 
   useEffect(() => {
     if (!selectedZone) return
@@ -298,14 +385,9 @@ function ZoneDesignerPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/zones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload(draftPoints)),
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const createdRaw = await createZone(buildPayload(draftPoints))
       const created = {
-        ...mapZoneFromApi(await response.json()),
+        ...mapZoneFromApi(createdRaw),
         category: zoneCategory,
         riskLevel,
         description: zoneDescription,
@@ -327,22 +409,17 @@ function ZoneDesignerPage() {
     const meta = categoryMeta(zoneCategory)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/zones/${selectedZone.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          zone_name: zoneName,
-          zone_type: meta.zoneType,
-          biosecurity_level: riskLevel || meta.level,
-          color: zoneColor || meta.color,
-          opacity: zoneOpacity,
-          description: zoneDescription,
-          polygon_points: selectedZone.polygon_points,
-        }),
+      const updatedRaw = await updateZone(selectedZone.id, {
+        zone_name: zoneName,
+        zone_type: meta.zoneType,
+        biosecurity_level: riskLevel || meta.level,
+        color: zoneColor || meta.color,
+        opacity: zoneOpacity,
+        description: zoneDescription,
+        polygon_points: selectedZone.polygon_points,
       })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const updated = {
-        ...mapZoneFromApi(await response.json()),
+        ...mapZoneFromApi(updatedRaw),
         category: zoneCategory,
         riskLevel,
         description: zoneDescription,
@@ -364,8 +441,7 @@ function ZoneDesignerPage() {
   const deleteSelected = async () => {
     if (selectedZone) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/zones/${selectedZone.id}`, { method: 'DELETE' })
-        if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`)
+        await deleteZoneApi(selectedZone.id)
         pushHistory()
         setZones((prev) => prev.filter((zone) => zone.id !== selectedZone.id))
         setSelectedZoneId(null)
@@ -393,17 +469,12 @@ function ZoneDesignerPage() {
 
     const points = duplicatePoints(selectedZone.polygon_points)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/zones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...buildPayload(points),
-          zone_name: `${zoneName} (bản sao)`,
-        }),
+      const createdRaw = await createZone({
+        ...buildPayload(points),
+        zone_name: `${zoneName} (bản sao)`,
       })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const created = {
-        ...mapZoneFromApi(await response.json()),
+        ...mapZoneFromApi(createdRaw),
         category: zoneCategory,
         riskLevel,
         description: zoneDescription,
@@ -521,7 +592,7 @@ function ZoneDesignerPage() {
               <span>Lọc theo trại</span>
               <select value={farmFilter} onChange={(e) => setFarmFilter(e.target.value)}>
                 <option value="all">Tất cả trại</option>
-                {FARMS.map((farm) => (
+                {farms.map((farm) => (
                   <option key={farm.id} value={farm.id}>{farm.name}</option>
                 ))}
               </select>
@@ -530,8 +601,7 @@ function ZoneDesignerPage() {
 
           <div className="zone-camera-list">
             {filteredCameras.map((camera) => {
-              const meta = cameras.find((item) => item.id === camera.id)
-              const online = meta?.status === 'online'
+              const online = camera.status === 'online'
               return (
                 <button
                   type="button"
@@ -608,11 +678,11 @@ function ZoneDesignerPage() {
           </div>
 
           <div className="zone-canvas-meta">
-            <span className={`zone-status-pill zone-status-pill--${cameraMeta.status}`}>
-              {cameraMeta.status === 'online' ? '● Frame mới nhất' : '● Camera offline'}
+            <span className={`zone-status-pill zone-status-pill--${cameraStatus}`}>
+              {cameraStatus === 'online' ? '● Frame mới nhất' : '● Camera offline'}
             </span>
-            <strong>{selectedCamera.name}</strong>
-            <span>{selectedCamera.zone} · {cameraMeta.resolution}</span>
+            <strong>{selectedCamera?.name}</strong>
+            <span>{selectedCamera?.zone} · {cameraResolution}</span>
             <span className="zone-canvas-meta__status">{apiStatus}</span>
           </div>
 
@@ -647,8 +717,8 @@ function ZoneDesignerPage() {
             >
               <div className="zone-canvas">
                 <img
-                  src={frameUrl}
-                  alt={selectedCamera.name}
+                  src={frameSrc || undefined}
+                  alt={selectedCamera?.name}
                   className="zone-canvas__image"
                   draggable={false}
                 />

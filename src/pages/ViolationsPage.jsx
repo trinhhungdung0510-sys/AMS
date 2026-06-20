@@ -27,7 +27,7 @@ import {
   zoneOptions,
 } from '../data/atshViolations'
 import { exportRowsAsExcel, formatDateTime } from '../utils/formatters'
-import { API_BASE_URL } from '../config/api'
+import { getEvents } from '../services/eventService'
 
 function ViolationsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -43,9 +43,7 @@ function ViolationsPage() {
   useEffect(() => {
     const loadEvents = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/events`)
-        if (!response.ok) return
-        const data = await response.json()
+        const data = await getEvents()
         if (!data.length) return
         const mapped = data.map(mapApiEventToViolation)
         setItems((prev) => {

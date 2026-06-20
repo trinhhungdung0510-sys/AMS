@@ -99,6 +99,18 @@ export function defaultRulesForCategory(category) {
   return DEFAULT_ZONE_RULES[category] || DEFAULT_ZONE_RULES.intermediate
 }
 
+export function mapCameraToDesigner(camera) {
+  return {
+    id: camera.id,
+    name: camera.name,
+    zone: camera.zone,
+    farmId: camera.farm_id,
+    status: camera.status,
+    resolution: camera.resolution,
+    scene: SCENE_BY_CAMERA[camera.id] || 'gate',
+  }
+}
+
 export function mapZoneFromApi(item) {
   const category = inferCategory(item.mau_sac, item.cap_atsh)
   return {
