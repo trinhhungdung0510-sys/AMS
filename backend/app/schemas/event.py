@@ -1,3 +1,5 @@
+from typing import Any, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -14,6 +16,27 @@ class EventResponse(BaseModel):
     nguoi_xu_ly: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class EventEngineResponse(BaseModel):
+    id: str
+    camera_id: str
+    zone_id: Optional[str]
+    rule_id: Optional[str]
+    event_type: Optional[str]
+    confidence: Optional[float]
+    snapshot_url: Optional[str]
+    started_at: Optional[str]
+    ended_at: Optional[str]
+    status: str
+    metadata: Optional[dict[str, Any]] = Field(default=None, alias="event_metadata")
+    created_at: Optional[str] = Field(default=None, alias="record_created_at")
+    camera_name: Optional[str] = None
+    zone_name: Optional[str] = None
+    rule_name: Optional[str] = None
+    severity: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class EmailAlertPreview(BaseModel):

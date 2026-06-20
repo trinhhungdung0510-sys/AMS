@@ -30,6 +30,7 @@ from app.models import (  # noqa: F401
     FarmRoute,
     FarmZone,
     ObjectTrack,
+    Observation,
     License,
     NotificationGateway,
     NotificationRule,
@@ -39,6 +40,7 @@ from app.models import (  # noqa: F401
     Workflow,
     WorkflowStep,
     TrackWorkflowProgress,
+    ZoneRule,
     ZonePolygon,
     ZoneTransition,
 )

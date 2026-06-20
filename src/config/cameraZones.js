@@ -13,8 +13,9 @@ export const DEFAULT_ZONE_COLOR = '#ff0000'
 export const CAMERA_DETAIL_TABS = [
   { id: 'live', label: 'Live View' },
   { id: 'zones', label: 'Zones' },
+  { id: 'rules', label: 'Rules' },
+  { id: 'observations', label: 'Observations' },
   { id: 'events', label: 'Events' },
-  { id: 'ai-rules', label: 'AI Rules' },
   { id: 'settings', label: 'Settings' },
 ]
 

@@ -21,8 +21,11 @@ import {
 import CameraSnapshotCard from '../components/camera/CameraSnapshotCard'
 import DetectionOverlay from '../components/camera/DetectionOverlay'
 import ZoneEditor from '../components/zones/ZoneEditor'
+import RuleEditor from '../components/rules/RuleEditor'
+import ObservationViewer from '../components/observations/ObservationViewer'
+import EventTimeline from '../components/events/EventTimeline'
 import { CAMERA_DETAIL_TABS } from '../config/cameraZones'
-import { getEvents } from '../services/eventService'
+import { getEvents, getCameraEventTimeline } from '../services/eventService'
 import { formatDateTime } from '../utils/formatters'
 
 const timeFilters = [
@@ -87,6 +90,8 @@ function CameraDetailPage() {
   const [snapshotError, setSnapshotError] = useState('')
   const [timeFilter, setTimeFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [engineEvents, setEngineEvents] = useState([])
+  const [timelineLoading, setTimelineLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -173,6 +178,25 @@ function CameraDetailPage() {
     loadLatestSnapshot(cameraId)
   }, [camera, cameraId, loadLatestSnapshot])
 
+  const loadEngineTimeline = useCallback(async () => {
+    if (!cameraId) return
+    setTimelineLoading(true)
+    try {
+      const timeline = await getCameraEventTimeline(cameraId)
+      setEngineEvents(timeline)
+    } catch {
+      setEngineEvents([])
+    } finally {
+      setTimelineLoading(false)
+    }
+  }, [cameraId])
+
+  useEffect(() => {
+    if (activeTab === 'events' || activeTab === 'rules') {
+      loadEngineTimeline()
+    }
+  }, [activeTab, loadEngineTimeline])
+
   const handleCaptureSnapshot = async () => {
     if (!cameraId) return
 
@@ -241,6 +265,20 @@ function CameraDetailPage() {
 
   const eventsPanel = (
     <>
+      <section className="panel panel--compact">
+        <div className="panel__header">
+          <h2 className="panel__title">Event Timeline (Rule Engine)</h2>
+          <button type="button" className="btn btn--outline" onClick={loadEngineTimeline}>
+            Refresh
+          </button>
+        </div>
+        <EventTimeline
+          events={engineEvents}
+          loading={timelineLoading}
+          emptyMessage="Chưa có sự kiện từ Rule Engine. Dùng Test Rule để sinh event giả."
+        />
+      </section>
+
       <section className="panel panel--compact">
         <div className="panel__header">
           <h2 className="panel__title">Bộ lọc</h2>
@@ -400,15 +438,38 @@ function CameraDetailPage() {
         </section>
       ) : null}
 
-      {activeTab === 'events' ? (
-        <div className="camera-detail__events-layout">{eventsPanel}</div>
+      {activeTab === 'rules' ? (
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <h2 className="panel__title">Rule Engine v1.3</h2>
+              <p className="panel__desc">Gắn rule với zone trên camera — mock engine sinh event để test pipeline</p>
+            </div>
+          </div>
+          <RuleEditor
+            cameraId={cameraId}
+            onEventCreated={() => loadEngineTimeline()}
+          />
+        </section>
       ) : null}
 
-      {activeTab === 'ai-rules' ? (
-        <section className="panel camera-detail__placeholder">
-          <h2 className="panel__title">AI Rules</h2>
-          <p>Module AI Rules sẽ được nâng cấp ở phiên bản tiếp theo.</p>
+      {activeTab === 'observations' ? (
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <h2 className="panel__title">Observations v1.4</h2>
+              <p className="panel__desc">Lớp trung gian Detector → Evaluator — normalized bbox, zone mapping</p>
+            </div>
+          </div>
+          <ObservationViewer
+            cameraId={cameraId}
+            onEventsCreated={() => loadEngineTimeline()}
+          />
         </section>
+      ) : null}
+
+      {activeTab === 'events' ? (
+        <div className="camera-detail__events-layout">{eventsPanel}</div>
       ) : null}
 
       {activeTab === 'settings' ? (

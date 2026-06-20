@@ -34,6 +34,8 @@ from app.models.user import User
 from app.models.visitor import Visitor
 from app.models.workflow import TrackWorkflowProgress, Workflow, WorkflowStep
 from app.models.zone_polygon import ZonePolygon
+from app.models.observation import Observation
+from app.models.zone_rule import ZoneRule
 from app.models.zone_transition import ZoneTransition
 
 __all__ = [
@@ -67,6 +69,7 @@ __all__ = [
     "NotificationGateway",
     "NotificationRule",
     "ObjectTrack",
+    "Observation",
     "PersonTrack",
     "TokenBlacklist",
     "User",
@@ -75,5 +78,6 @@ __all__ = [
     "WorkflowStep",
     "TrackWorkflowProgress",
     "ZonePolygon",
+    "ZoneRule",
     "ZoneTransition",
 ]

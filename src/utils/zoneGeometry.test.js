@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   denormalizePoint,
   normalizePoint,
+  pointInPolygon,
+  bboxCenter,
   resolveNormalizedPoints,
   scalePolygonToNormalized,
 } from './zoneGeometry'
@@ -83,5 +85,27 @@ describe('polygon scaling', () => {
     expect(resolveNormalizedPoints(zone, { width: 1920, height: 1080 })).toEqual([
       { x: 0.5, y: 0.5 },
     ])
+  })
+})
+
+describe('pointInPolygon', () => {
+  it('detects point inside unit square', () => {
+    const square = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+    ]
+    expect(pointInPolygon({ x: 0.5, y: 0.5 }, square)).toBe(true)
+    expect(pointInPolygon({ x: 1.5, y: 0.5 }, square)).toBe(false)
+  })
+})
+
+describe('bboxCenter', () => {
+  it('returns center of normalized bbox', () => {
+    expect(bboxCenter({ x: 0.2, y: 0.3, width: 0.4, height: 0.2 })).toEqual({
+      x: 0.4,
+      y: 0.4,
+    })
   })
 })

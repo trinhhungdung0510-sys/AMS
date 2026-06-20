@@ -11,6 +11,7 @@ from app.api.ai_models import router as ai_models_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.camera_health import router as camera_health_router
+from app.api.camera_zone_rules import router as camera_zone_rules_router
 from app.api.camera_zones import router as camera_zones_router
 from app.api.camera_snapshots import router as camera_snapshots_router
 from app.api.cameras import router as cameras_router
@@ -26,7 +27,7 @@ from app.api.gateways import router as gateways_router
 from app.api.health import router as health_router
 from app.api.licenses import router as licenses_router
 from app.api.map import router as map_router
-from app.api.notifications import router as notifications_router
+from app.api.observations import router as observations_router
 from app.api.realtime import router as realtime_router
 from app.api.biosecurity_rules import router as biosecurity_rules_router
 from app.api.rules import router as rules_router
@@ -71,6 +72,7 @@ app.include_router(camera_health_router, prefix=settings.api_prefix)
 app.include_router(cameras_router, prefix=settings.api_prefix)
 app.include_router(camera_snapshots_router, prefix=settings.api_prefix)
 app.include_router(camera_zones_router, prefix=settings.api_prefix)
+app.include_router(camera_zone_rules_router, prefix=settings.api_prefix)
 app.include_router(compliance_router, prefix=settings.api_prefix)
 app.include_router(dashboard_router, prefix=settings.api_prefix)
 app.include_router(devices_router, prefix=settings.api_prefix)
@@ -81,6 +83,7 @@ app.include_router(templates_router, prefix=settings.api_prefix)
 app.include_router(gateways_router, prefix=settings.api_prefix)
 app.include_router(map_router, prefix=settings.api_prefix)
 app.include_router(licenses_router, prefix=settings.api_prefix)
+app.include_router(observations_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
 app.include_router(smart_farm_router, prefix=settings.api_prefix)
 app.include_router(snapshots_router, prefix=settings.api_prefix)

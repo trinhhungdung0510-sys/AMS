@@ -156,3 +156,36 @@ export function getReferenceFromMetrics(metrics) {
     height: Math.round(metrics.naturalHeight),
   }
 }
+
+/**
+ * Ray-casting point-in-polygon test using normalized coordinates.
+ */
+export function pointInPolygon(point, polygon) {
+  if (!point || !Array.isArray(polygon) || polygon.length < 3) {
+    return false
+  }
+
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i].x
+    const yi = polygon[i].y
+    const xj = polygon[j].x
+    const yj = polygon[j].y
+
+    const intersects =
+      yi > point.y !== yj > point.y &&
+      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi + Number.EPSILON) + xi
+
+    if (intersects) inside = !inside
+  }
+
+  return inside
+}
+
+/** Center point of a normalized bounding box. */
+export function bboxCenter(bbox) {
+  return {
+    x: bbox.x + bbox.width / 2,
+    y: bbox.y + bbox.height / 2,
+  }
+}
