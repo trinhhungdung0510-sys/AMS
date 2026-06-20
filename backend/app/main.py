@@ -27,6 +27,7 @@ from app.api.gateways import router as gateways_router
 from app.api.health import router as health_router
 from app.api.licenses import router as licenses_router
 from app.api.map import router as map_router
+from app.api.notifications import router as notifications_router
 from app.api.observations import router as observations_router
 from app.api.realtime import router as realtime_router
 from app.api.biosecurity_rules import router as biosecurity_rules_router
