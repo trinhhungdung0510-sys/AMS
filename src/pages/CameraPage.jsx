@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getCameras } from '../services/cameraService'
+import { getCameras, getCameraIp } from '../services/cameraService'
 
 function CameraPage() {
   const [cameras, setCameras] = useState([])
@@ -60,7 +60,7 @@ function CameraPage() {
                 <td className="data-table__mono">{camera.id}</td>
                 <td className="data-table__desc">{camera.name}</td>
                 <td>{camera.zone}</td>
-                <td className="data-table__mono">{camera.ip_address}</td>
+                <td className="data-table__mono">{getCameraIp(camera)}</td>
 
                 <td>
                   <span

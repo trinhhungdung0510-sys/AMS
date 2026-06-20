@@ -1,15 +1,129 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Mail, Send, ShieldCheck, SlidersHorizontal, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { alertSettings, cameras as initialCameras, severityLabels, users } from '../data/mockData'
+import CameraFormPanel from '../components/camera/CameraFormPanel'
+import { alertSettings, severityLabels, users } from '../data/mockData'
+import { getFarms } from '../services/farmService'
+import {
+  EMPTY_CAMERA_FORM,
+  buildCameraPayload,
+  cameraToFormValues,
+  createCamera,
+  deleteCamera,
+  getCameraIp,
+  getCameras,
+  updateCamera,
+  validateCameraForm,
+} from '../services/cameraService'
 
 function SettingsPage() {
-  const [cameras, setCameras] = useState(initialCameras)
+  const [cameras, setCameras] = useState([])
+  const [farms, setFarms] = useState([{ id: 'FARM-001', name: 'AMS Farm Long An' }])
+  const [loading, setLoading] = useState(true)
+  const [formMode, setFormMode] = useState(null)
+  const [editingCamera, setEditingCamera] = useState(null)
+  const [statusMessage, setStatusMessage] = useState('')
 
-  const toggleEnabled = (id) => {
-    setCameras((prev) =>
-      prev.map((cam) => (cam.id === id ? { ...cam, enabled: !cam.enabled } : cam)),
-    )
+  const formInitialValues = useMemo(() => {
+    if (formMode === 'edit') return cameraToFormValues(editingCamera)
+    return { ...EMPTY_CAMERA_FORM }
+  }, [editingCamera, formMode])
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  async function loadData() {
+    setLoading(true)
+    try {
+      const [cameraData, farmData] = await Promise.all([
+        getCameras(),
+        getFarms().catch(() => []),
+      ])
+      setCameras(cameraData)
+      if (farmData.length) {
+        setFarms(farmData.map((farm) => ({ id: farm.id, name: farm.name })))
+      }
+    } catch (error) {
+      setStatusMessage(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const openCreateForm = () => {
+    setEditingCamera(null)
+    setFormMode('create')
+    setStatusMessage('')
+  }
+
+  const openEditForm = (camera) => {
+    setEditingCamera(camera)
+    setFormMode('edit')
+    setStatusMessage('')
+  }
+
+  const closeForm = () => {
+    setFormMode(null)
+    setEditingCamera(null)
+  }
+
+  const handleCreate = async (values, setErrors) => {
+    const validationErrors = validateCameraForm(values)
+    if (Object.keys(validationErrors).length) {
+      setErrors(validationErrors)
+      return
+    }
+
+    try {
+      const created = await createCamera(buildCameraPayload(values))
+      setCameras((prev) => [...prev, created])
+      setStatusMessage(`Đã thêm ${created.name}`)
+      closeForm()
+    } catch (error) {
+      setStatusMessage(error.message)
+    }
+  }
+
+  const handleUpdate = async (values, setErrors) => {
+    const validationErrors = validateCameraForm(values, { isEdit: true })
+    if (Object.keys(validationErrors).length) {
+      setErrors(validationErrors)
+      return
+    }
+
+    try {
+      const updated = await updateCamera(
+        editingCamera.id,
+        buildCameraPayload(values, { isEdit: true }),
+      )
+      setCameras((prev) => prev.map((camera) => (camera.id === updated.id ? updated : camera)))
+      setStatusMessage(`Đã cập nhật ${updated.name}`)
+      closeForm()
+    } catch (error) {
+      setStatusMessage(error.message)
+    }
+  }
+
+  const handleDelete = async (camera) => {
+    if (!window.confirm(`Xóa camera ${camera.name}?`)) return
+
+    try {
+      await deleteCamera(camera.id)
+      setCameras((prev) => prev.filter((item) => item.id !== camera.id))
+      setStatusMessage(`Đã xóa ${camera.name}`)
+    } catch (error) {
+      setStatusMessage(error.message)
+    }
+  }
+
+  const toggleActive = async (camera) => {
+    try {
+      const updated = await updateCamera(camera.id, { is_active: !camera.is_active })
+      setCameras((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+    } catch (error) {
+      setStatusMessage(error.message)
+    }
   }
 
   return (
@@ -60,9 +174,10 @@ function SettingsPage() {
           <div className="panel__header">
             <div>
               <h2 className="panel__title">Quản lý camera</h2>
-              <p className="panel__desc">Bật/tắt và cấu hình camera trong hệ thống AMS</p>
+              <p className="panel__desc">Thêm, sửa và cấu hình camera IP thực trong hệ thống AMS</p>
+              {statusMessage ? <p className="panel__meta">{statusMessage}</p> : null}
             </div>
-            <button type="button" className="btn btn--primary">
+            <button type="button" className="btn btn--primary" onClick={openCreateForm}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
@@ -74,66 +189,84 @@ function SettingsPage() {
             </Link>
           </div>
 
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Mã</th>
-                  <th>Tên camera</th>
-                  <th>Khu vực</th>
-                  <th>Địa chỉ IP</th>
-                  <th>Độ phân giải</th>
-                  <th>FPS</th>
-                  <th>Trạng thái</th>
-                  <th>Kích hoạt</th>
-                  <th>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cameras.map((camera) => (
-                  <tr key={camera.id}>
-                    <td className="data-table__mono">{camera.id}</td>
-                    <td className="data-table__desc">{camera.name}</td>
-                    <td>{camera.zone}</td>
-                    <td className="data-table__mono">{camera.ip}</td>
-                    <td>{camera.resolution}</td>
-                    <td>{camera.fps}</td>
-                    <td>
-                      <span className={`status-pill status-pill--${camera.status}`}>
-                        {camera.status === 'online' ? 'Online' : 'Offline'}
-                      </span>
-                    </td>
-                    <td>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          checked={camera.enabled}
-                          onChange={() => toggleEnabled(camera.id)}
-                        />
-                        <span className="toggle__slider" />
-                      </label>
-                    </td>
-                    <td>
-                      <div className="action-group">
-                        <button type="button" className="btn-icon" aria-label="Chỉnh sửa">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                        </button>
-                        <button type="button" className="btn-icon btn-icon--danger" aria-label="Xóa">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
+          {loading ? (
+            <div className="violation-empty">Đang tải danh sách camera...</div>
+          ) : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Tên camera</th>
+                    <th>Hãng</th>
+                    <th>Khu vực</th>
+                    <th>IP</th>
+                    <th>Port</th>
+                    <th>Độ phân giải</th>
+                    <th>FPS</th>
+                    <th>Trạng thái</th>
+                    <th>Kích hoạt</th>
+                    <th>Thao tác</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {cameras.map((camera) => (
+                    <tr key={camera.id}>
+                      <td className="data-table__mono">{camera.id}</td>
+                      <td className="data-table__desc">{camera.name}</td>
+                      <td>{camera.manufacturer || '—'}</td>
+                      <td>{camera.zone}</td>
+                      <td className="data-table__mono">{getCameraIp(camera)}</td>
+                      <td>{camera.port ?? 554}</td>
+                      <td>{camera.resolution}</td>
+                      <td>{camera.fps}</td>
+                      <td>
+                        <span className={`status-pill status-pill--${camera.status}`}>
+                          {camera.status === 'online' ? 'Online' : 'Offline'}
+                        </span>
+                      </td>
+                      <td>
+                        <label className="toggle">
+                          <input
+                            type="checkbox"
+                            checked={camera.is_active}
+                            onChange={() => toggleActive(camera)}
+                          />
+                          <span className="toggle__slider" />
+                        </label>
+                      </td>
+                      <td>
+                        <div className="action-group">
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            aria-label="Chỉnh sửa"
+                            onClick={() => openEditForm(camera)}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon btn-icon--danger"
+                            aria-label="Xóa"
+                            onClick={() => handleDelete(camera)}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         <section className="panel">
@@ -182,6 +315,29 @@ function SettingsPage() {
           </div>
         </section>
       </div>
+
+      {formMode === 'create' ? (
+        <CameraFormPanel
+          title="Thêm camera"
+          submitLabel="Thêm camera"
+          initialValues={formInitialValues}
+          farms={farms}
+          onSubmit={handleCreate}
+          onCancel={closeForm}
+        />
+      ) : null}
+
+      {formMode === 'edit' ? (
+        <CameraFormPanel
+          title={`Sửa camera · ${editingCamera?.name || ''}`}
+          submitLabel="Lưu thay đổi"
+          initialValues={formInitialValues}
+          farms={farms}
+          isEdit
+          onSubmit={handleUpdate}
+          onCancel={closeForm}
+        />
+      ) : null}
     </div>
   )
 }

@@ -371,18 +371,28 @@ def seed() -> None:
             )
 
         for camera in CAMERAS:
+            ip = camera[4]
+            is_online = camera[5] == "online"
+            now = datetime.now(timezone.utc).isoformat()
             db.merge(
                 Camera(
                     id=camera[0],
                     farm_id=camera[1],
                     name=camera[2],
                     zone=camera[3],
-                    ip_address=camera[4],
+                    manufacturer="Hikvision",
+                    ip=ip,
+                    port=554,
+                    username="admin",
+                    password="admin123",
+                    rtsp_url=f"rtsp://admin:admin123@{ip}:554/Streaming/Channels/101",
                     status=camera[5],
                     resolution=camera[6],
                     uptime=camera[7],
                     fps=camera[8],
                     is_active=True,
+                    last_seen=now if is_online else None,
+                    created_at=now,
                 )
             )
 

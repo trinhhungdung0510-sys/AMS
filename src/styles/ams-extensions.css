@@ -2096,3 +2096,49 @@
 .camera-feed__offline {
   z-index: 1;
 }
+
+/* ── Camera form overlay ───────────────────────────────────── */
+
+.camera-form-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.camera-form-panel {
+  width: min(920px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.camera-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.camera-form__full {
+  grid-column: 1 / -1;
+}
+
+.camera-form__checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.camera-form__error {
+  color: #dc2626;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .camera-form__grid {
+    grid-template-columns: 1fr;
+  }
+}

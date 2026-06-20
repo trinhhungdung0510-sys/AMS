@@ -12,7 +12,7 @@ import {
   statusLabels,
 } from '../data/mockData'
 import { mapApiEventToViolation, TODAY } from '../data/atshViolations'
-import { getCameraById } from '../services/cameraService'
+import { getCameraById, getCameraIp } from '../services/cameraService'
 import { getEvents } from '../services/eventService'
 import { formatDateTime } from '../utils/formatters'
 
@@ -168,7 +168,7 @@ function CameraDetailPage() {
     )
   }
 
-  const cameraIp = camera.ip_address ?? camera.ip
+  const cameraIp = getCameraIp(camera)
 
   return (
     <div className="camera-detail">
