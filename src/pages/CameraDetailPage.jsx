@@ -20,7 +20,8 @@ import {
 } from '../services/cameraSnapshotService'
 import CameraSnapshotCard from '../components/camera/CameraSnapshotCard'
 import DetectionOverlay from '../components/camera/DetectionOverlay'
-import ZoneEditor from '../components/camera/ZoneEditor'
+import ZoneEditor from '../components/zones/ZoneEditor'
+import { CAMERA_DETAIL_TABS } from '../config/cameraZones'
 import { getEvents } from '../services/eventService'
 import { formatDateTime } from '../utils/formatters'
 
@@ -78,6 +79,7 @@ function CameraDetailPage() {
   const [alerts, setAlerts] = useState([])
   const [images, setImages] = useState([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('live')
   const [snapshotUrl, setSnapshotUrl] = useState('')
   const [snapshotCapturedAt, setSnapshotCapturedAt] = useState('')
   const [snapshotLoading, setSnapshotLoading] = useState(false)
@@ -237,121 +239,77 @@ function CameraDetailPage() {
     ? `${resolveSnapshotAssetUrl(snapshotUrl)}?t=${encodeURIComponent(snapshotCapturedAt || 'latest')}`
     : ''
 
-  return (
-    <div className="camera-detail">
-      <div className="camera-detail__topbar">
-        <Link className="btn btn--outline" to="/monitoring">
-          <ChevronLeft size={16} />
-          Quay lại giám sát
-        </Link>
-        <div className="camera-detail__camera-info">
-          <span className="camera-detail__id">{camera.id}</span>
-          <span className={`status-pill status-pill--${camera.status}`}>
-            {camera.status === 'online' ? 'Online' : 'Offline'}
-          </span>
-          <span className="camera-detail__ip">{cameraIp}</span>
+  const eventsPanel = (
+    <>
+      <section className="panel panel--compact">
+        <div className="panel__header">
+          <h2 className="panel__title">Bộ lọc</h2>
         </div>
-      </div>
-
-      <div className="camera-detail__layout">
-        <section className="camera-detail__video-section">
-          <CameraFeed camera={camera} size="large" />
-          <div className="info-grid">
-            <div><span>ID camera</span><strong>{camera.id}</strong></div>
-            <div><span>IP camera</span><strong>{cameraIp}</strong></div>
-            <div><span>Khu vực</span><strong>{camera.zone}</strong></div>
-            <div><span>Trạng thái</span><strong>{camera.status === 'online' ? 'Online' : 'Offline'}</strong></div>
-            <div><span>Uptime</span><strong>{camera.uptime}%</strong></div>
-            <div><span>FPS</span><strong>{camera.fps}</strong></div>
+        <div className="filter-panel">
+          <div className="filter-panel__group">
+            <span className="filter-panel__label">Thời gian</span>
+            <div className="filter-chips">
+              {timeFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={`filter-chip${timeFilter === filter.value ? ' filter-chip--active' : ''}`}
+                  onClick={() => setTimeFilter(filter.value)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <CameraSnapshotCard
-            snapshotUrl={snapshotUrl}
-            capturedAt={snapshotCapturedAt}
-            loading={snapshotLoading}
-            capturing={snapshotCapturing}
-            error={snapshotError}
-            onCapture={handleCaptureSnapshot}
-            onRefresh={() => loadLatestSnapshot(cameraId)}
-          />
+          <div className="filter-panel__group">
+            <span className="filter-panel__label">Loại cảnh báo</span>
+            <select
+              className="toolbar__select toolbar__select--full"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <option value="all">Tất cả loại</option>
+              {alertTypeOptions.map((item) => (
+                <option key={item.value} value={item.value}>{item.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
 
-          <DetectionOverlay cameraId={cameraId} snapshotUrl={snapshotImageUrl} />
-
-          <ZoneEditor cameraId={cameraId} snapshotUrl={snapshotImageUrl} />
-        </section>
-
-        <aside className="camera-detail__sidebar">
-          <section className="panel panel--compact">
-            <div className="panel__header">
-              <h2 className="panel__title">Bộ lọc</h2>
-            </div>
-            <div className="filter-panel">
-              <div className="filter-panel__group">
-                <span className="filter-panel__label">Thời gian</span>
-                <div className="filter-chips">
-                  {timeFilters.map((filter) => (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      className={`filter-chip${timeFilter === filter.value ? ' filter-chip--active' : ''}`}
-                      onClick={() => setTimeFilter(filter.value)}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
+      <section className="panel panel--compact">
+        <div className="panel__header">
+          <h2 className="panel__title">Danh sách cảnh báo</h2>
+          <span className="panel__meta">{filteredAlerts.length} kết quả</span>
+        </div>
+        <ul className="alert-list">
+          {filteredAlerts.length === 0 ? (
+            <li className="alert-list__empty">Không có cảnh báo trong khoảng thời gian này.</li>
+          ) : (
+            filteredAlerts.map((alert) => (
+              <li key={alert.id} className="alert-list__item">
+                <div className="alert-list__time">
+                  <span>{alert.time}</span>
+                  <span>{alert.date.slice(5)}</span>
                 </div>
-              </div>
-
-              <div className="filter-panel__group">
-                <span className="filter-panel__label">Loại cảnh báo</span>
-                <select
-                  className="toolbar__select toolbar__select--full"
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                >
-                  <option value="all">Tất cả loại</option>
-                  {alertTypeOptions.map((item) => (
-                    <option key={item.value} value={item.value}>{item.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel panel--compact">
-            <div className="panel__header">
-              <h2 className="panel__title">Danh sách cảnh báo</h2>
-              <span className="panel__meta">{filteredAlerts.length} kết quả</span>
-            </div>
-            <ul className="alert-list">
-              {filteredAlerts.length === 0 ? (
-                <li className="alert-list__empty">Không có cảnh báo trong khoảng thời gian này.</li>
-              ) : (
-                filteredAlerts.map((alert) => (
-                  <li key={alert.id} className="alert-list__item">
-                    <div className="alert-list__time">
-                      <span>{alert.time}</span>
-                      <span>{alert.date.slice(5)}</span>
-                    </div>
-                    <div className="alert-list__body">
-                      <span className="alert-list__type">{alert.typeLabel}</span>
-                      <div className="alert-list__tags">
-                        <span className={`badge badge--${alert.severity}`}>
-                          {severityLabels[alert.severity]}
-                        </span>
-                        <span className={`status-tag status-tag--${alert.status}`}>
-                          {statusLabels[alert.status]}
-                        </span>
-                        <span className="confidence-pill">{alert.confidence}% AI</span>
-                      </div>
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
-          </section>
-        </aside>
-      </div>
+                <div className="alert-list__body">
+                  <span className="alert-list__type">{alert.typeLabel}</span>
+                  <div className="alert-list__tags">
+                    <span className={`badge badge--${alert.severity}`}>
+                      {severityLabels[alert.severity]}
+                    </span>
+                    <span className={`status-tag status-tag--${alert.status}`}>
+                      {statusLabels[alert.status]}
+                    </span>
+                    <span className="confidence-pill">{alert.confidence}% AI</span>
+                  </div>
+                </div>
+              </li>
+            ))
+          )}
+        </ul>
+      </section>
 
       <section className="panel">
         <div className="panel__header">
@@ -372,6 +330,111 @@ function CameraDetailPage() {
           </div>
         )}
       </section>
+    </>
+  )
+
+  return (
+    <div className="camera-detail">
+      <div className="camera-detail__topbar">
+        <Link className="btn btn--outline" to="/monitoring">
+          <ChevronLeft size={16} />
+          Quay lại giám sát
+        </Link>
+        <div className="camera-detail__camera-info">
+          <span className="camera-detail__id">{camera.id}</span>
+          <span className={`status-pill status-pill--${camera.status}`}>
+            {camera.status === 'online' ? 'Online' : 'Offline'}
+          </span>
+          <span className="camera-detail__ip">{cameraIp}</span>
+        </div>
+      </div>
+
+      <nav className="camera-detail__tabs" aria-label="Camera detail tabs">
+        {CAMERA_DETAIL_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`camera-detail__tab${activeTab === tab.id ? ' camera-detail__tab--active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === 'live' ? (
+        <div className="camera-detail__layout">
+          <section className="camera-detail__video-section">
+            <CameraFeed camera={camera} size="large" />
+            <div className="info-grid">
+              <div><span>ID camera</span><strong>{camera.id}</strong></div>
+              <div><span>IP camera</span><strong>{cameraIp}</strong></div>
+              <div><span>Khu vực</span><strong>{camera.zone}</strong></div>
+              <div><span>Trạng thái</span><strong>{camera.status === 'online' ? 'Online' : 'Offline'}</strong></div>
+              <div><span>Uptime</span><strong>{camera.uptime}%</strong></div>
+              <div><span>FPS</span><strong>{camera.fps}</strong></div>
+            </div>
+            <CameraSnapshotCard
+              snapshotUrl={snapshotUrl}
+              capturedAt={snapshotCapturedAt}
+              loading={snapshotLoading}
+              capturing={snapshotCapturing}
+              error={snapshotError}
+              onCapture={handleCaptureSnapshot}
+              onRefresh={() => loadLatestSnapshot(cameraId)}
+            />
+            <DetectionOverlay cameraId={cameraId} snapshotUrl={snapshotImageUrl} />
+          </section>
+        </div>
+      ) : null}
+
+      {activeTab === 'zones' ? (
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <h2 className="panel__title">Quản lý Zone v1.1</h2>
+              <p className="panel__desc">Vùng giám sát trên ảnh camera — hỗ trợ Zone và SubZone</p>
+            </div>
+          </div>
+          <ZoneEditor cameraId={cameraId} previewUrl={snapshotImageUrl} />
+        </section>
+      ) : null}
+
+      {activeTab === 'events' ? (
+        <div className="camera-detail__events-layout">{eventsPanel}</div>
+      ) : null}
+
+      {activeTab === 'ai-rules' ? (
+        <section className="panel camera-detail__placeholder">
+          <h2 className="panel__title">AI Rules</h2>
+          <p>Module AI Rules sẽ được nâng cấp ở phiên bản tiếp theo.</p>
+        </section>
+      ) : null}
+
+      {activeTab === 'settings' ? (
+        <section className="panel">
+          <div className="panel__header">
+            <h2 className="panel__title">Cài đặt camera</h2>
+          </div>
+          <div className="info-grid">
+            <div><span>ID</span><strong>{camera.id}</strong></div>
+            <div><span>Tên</span><strong>{camera.name}</strong></div>
+            <div><span>IP</span><strong>{cameraIp}</strong></div>
+            <div><span>Trạng thái</span><strong>{camera.status}</strong></div>
+            <div><span>Khu vực trang trại</span><strong>{camera.zone}</strong></div>
+            <div><span>FPS</span><strong>{camera.fps}</strong></div>
+          </div>
+          <CameraSnapshotCard
+            snapshotUrl={snapshotUrl}
+            capturedAt={snapshotCapturedAt}
+            loading={snapshotLoading}
+            capturing={snapshotCapturing}
+            error={snapshotError}
+            onCapture={handleCaptureSnapshot}
+            onRefresh={() => loadLatestSnapshot(cameraId)}
+          />
+        </section>
+      ) : null}
     </div>
   )
 }

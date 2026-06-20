@@ -11,7 +11,7 @@ from app.api.ai_models import router as ai_models_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.camera_health import router as camera_health_router
-from app.api.camera_editor_zones import router as camera_editor_zones_router
+from app.api.camera_zones import router as camera_zones_router
 from app.api.camera_snapshots import router as camera_snapshots_router
 from app.api.cameras import router as cameras_router
 from app.api.compliance import router as compliance_router
@@ -70,7 +70,7 @@ app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(camera_health_router, prefix=settings.api_prefix)
 app.include_router(cameras_router, prefix=settings.api_prefix)
 app.include_router(camera_snapshots_router, prefix=settings.api_prefix)
-app.include_router(camera_editor_zones_router, prefix=settings.api_prefix)
+app.include_router(camera_zones_router, prefix=settings.api_prefix)
 app.include_router(compliance_router, prefix=settings.api_prefix)
 app.include_router(dashboard_router, prefix=settings.api_prefix)
 app.include_router(devices_router, prefix=settings.api_prefix)

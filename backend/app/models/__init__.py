@@ -7,6 +7,7 @@ from app.models.audit_log import AuditLog
 from app.models.biosecurity_rule import BiosecurityRule
 from app.models.camera import Camera
 from app.models.camera_editor_zone import CameraEditorZone
+from app.models.camera_zone import CameraZone
 from app.models.camera_health import CameraHealth
 from app.models.camera_stream import CameraStream
 from app.models.edge_device import EdgeDevice
@@ -44,6 +45,7 @@ __all__ = [
     "AuditLog",
     "BiosecurityRule",
     "Camera",
+    "CameraZone",
     "CameraEditorZone",
     "CameraHealth",
     "CameraStream",

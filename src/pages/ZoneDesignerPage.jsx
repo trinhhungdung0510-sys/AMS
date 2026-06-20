@@ -52,7 +52,7 @@ import {
   deleteZone as deleteZoneApi,
   listZones,
   updateZone,
-} from '../services/zoneService'
+} from '../services/farmZoneService'
 
 function ZoneDesignerPage() {
   const canvasRef = useRef(null)

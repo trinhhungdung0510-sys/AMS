@@ -13,6 +13,7 @@ from app.data.zone_designer_catalog import ATSH_LEVEL_COLORS, ATSH_LEVEL_LABELS,
 from app.database.session import get_db
 from app.models import ZonePolygon
 from app.schemas.camera_editor_zone import CameraEditorZoneUpdate
+from app.schemas.camera_zone import CameraZoneUpdate
 from app.schemas.zone import (
     ZoneClassificationResponse,
     ZonePolygonCreate,
@@ -26,6 +27,12 @@ from app.services.camera_editor_zone_service import (
     get_editor_zone_or_none,
     update_editor_zone,
     zone_to_response_dict as editor_zone_to_response_dict,
+)
+from app.services.camera_zone_service import (
+    delete_camera_zone,
+    get_camera_zone_or_none,
+    update_camera_zone,
+    zone_to_response_dict as camera_zone_to_response_dict,
 )
 from app.services.zone_designer_engine import (
     resolve_color,
@@ -137,6 +144,15 @@ def create_zone(payload: ZonePolygonCreate, db: Session = Depends(get_db)) -> Zo
 
 @router.put("/{zone_id}")
 def update_zone(zone_id: str, body: dict = Body(...), db: Session = Depends(get_db)):
+    camera_zone = get_camera_zone_or_none(db, zone_id)
+    if camera_zone is not None:
+        try:
+            payload = CameraZoneUpdate.model_validate(body)
+            updated = update_camera_zone(db, camera_zone, payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        return camera_zone_to_response_dict(updated)
+
     editor_zone = get_editor_zone_or_none(db, zone_id)
     if editor_zone is not None:
         try:
@@ -180,6 +196,11 @@ def update_zone(zone_id: str, body: dict = Body(...), db: Session = Depends(get_
 
 @router.delete("/{zone_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_zone(zone_id: str, db: Session = Depends(get_db)) -> None:
+    camera_zone = get_camera_zone_or_none(db, zone_id)
+    if camera_zone is not None:
+        delete_camera_zone(db, camera_zone)
+        return
+
     editor_zone = get_editor_zone_or_none(db, zone_id)
     if editor_zone is not None:
         delete_editor_zone(db, editor_zone)
