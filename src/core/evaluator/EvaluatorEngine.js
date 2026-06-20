@@ -10,7 +10,7 @@ import {
   PersonExitEvaluator,
   PpeRequiredEvaluator,
 } from './RuleEvaluator'
-import { defaultZonePresenceTracker } from '../runtime/ZonePresenceTracker'
+import { defaultZonePresenceTracker, PRESENCE_UNKNOWN } from '../runtime/ZonePresenceTracker'
 
 const EVALUATORS = [
   new PersonEnterEvaluator(),
@@ -53,17 +53,6 @@ export class EvaluatorEngine {
     const cameraId = observation.camera_id || observation.cameraId
     const results = []
     const transitionByTrackZone = new Map()
-
-    const resolveTransition = (trackId, zoneId, isInside) => {
-      const cacheKey = `${trackId}:${zoneId}`
-      if (!transitionByTrackZone.has(cacheKey)) {
-        transitionByTrackZone.set(
-          cacheKey,
-          this.zonePresenceTracker.update(cameraId, trackId, zoneId, isInside),
-        )
-      }
-      return transitionByTrackZone.get(cacheKey)
-    }
 
     ;(rules || [])
       .filter((rule) => rule.enabled)
@@ -108,8 +97,41 @@ export class EvaluatorEngine {
 
           const zoneMapping = findMappingForObject(zoneMappings, trackId)
           const state = stateEngine?.getState(cameraId, trackId) || {}
-          const isInside = this.resolveTrackInZone(track, zoneMapping, rule.zone_id)
-          const transition = resolveTransition(trackId, rule.zone_id, isInside)
+          const activeZoneIds = new Set([
+            ...(zoneMapping?.zones || []),
+            ...(zoneMapping?.subzones || []),
+          ])
+          const monitoredZoneIds = (rules || [])
+            .filter((item) => item.enabled && ['PERSON_ENTER', 'PERSON_EXIT'].includes(item.rule_type))
+            .map((item) => item.zone_id)
+
+          if (!transitionByTrackZone.has(trackId)) {
+            monitoredZoneIds.forEach((zoneId) => {
+              if (this.zonePresenceTracker.getState(cameraId, trackId, zoneId) === PRESENCE_UNKNOWN) {
+                this.zonePresenceTracker.update(cameraId, trackId, zoneId, false, observation.timestamp || observation.created_at)
+              }
+            })
+
+            const zoneResults = this.zonePresenceTracker.applyZones(
+              cameraId,
+              trackId,
+              activeZoneIds,
+              observation.timestamp || observation.created_at,
+              monitoredZoneIds,
+            )
+            stateEngine?.syncZonePresence?.({
+              cameraId,
+              trackId,
+              activeZoneIds,
+              timestamp: observation.timestamp || observation.created_at,
+              zonePresenceTracker: this.zonePresenceTracker,
+              monitoredZoneIds,
+            })
+            transitionByTrackZone.set(trackId, zoneResults)
+          }
+
+          const zoneResults = transitionByTrackZone.get(trackId)
+          const transition = zoneResults?.[rule.zone_id]?.transition ?? null
 
           const hits = evaluator.evaluate({
             track,

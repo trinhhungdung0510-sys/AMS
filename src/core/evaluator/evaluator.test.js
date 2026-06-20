@@ -236,6 +236,8 @@ describe('EvaluatorEngine runtime integration', () => {
       stateEngine,
     })
 
+    presenceTracker.update('CAM-1', 'A', 'CZ-1', false, observation.timestamp)
+
     const firstPass = engine.evaluate({
       observation,
       rules: [ruleEnter, ruleExit, ruleCount],

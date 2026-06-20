@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.core.event_bus import get_event_bus
 from app.core.event_bus import event_types as topics
-from app.core.runtime.zone_presence_tracker import PRESENCE_ENTER, PRESENCE_EXIT, get_zone_presence_tracker
+from app.core.runtime.zone_presence_tracker import (
+    PRESENCE_ENTER,
+    PRESENCE_EXIT,
+    get_zone_presence_tracker,
+)
 from app.core.runtime.track_store import get_track_store
 from app.core.runtime.zone_mapper import map_observation_to_zones, object_in_zone
 from app.database.session import SessionLocal
@@ -104,7 +108,7 @@ def handle_track_updated(message: dict[str, Any]) -> None:
 
     db = SessionLocal()
     try:
-        hits = _evaluate_track_rules(db, track, observation, zone_mapping)
+    hits = _evaluate_track_rules(db, track, observation, zone_mapping, is_new=payload.get("isNew"))
         for hit in hits:
             _publish(topics.RULE_EVALUATED, hit)
             create_event_from_evaluation(db, EventEngineCreate(**hit["eventPayload"]))
@@ -135,11 +139,67 @@ def handle_event_created(message: dict[str, Any]) -> None:
     )
 
 
+def _active_zone_ids(zone_mapping: Optional[dict[str, Any]]) -> set[str]:
+    if not zone_mapping:
+        return set()
+    active = set(zone_mapping.get("zones") or [])
+    active.update(zone_mapping.get("subzones") or [])
+    return active
+
+
+def _seed_track_zone_outside(
+    presence_tracker,
+    track: dict[str, Any],
+    rules: list,
+    observation: dict[str, Any],
+) -> None:
+    timestamp = observation.get("timestamp") or observation.get("created_at")
+    for rule in rules:
+        if not rule.enabled:
+            continue
+        if rule.rule_type not in ("PERSON_ENTER", "PERSON_EXIT"):
+            continue
+        if presence_tracker.get_state(track["cameraId"], track["trackId"], rule.zone_id) == PRESENCE_UNKNOWN:
+            presence_tracker.update(
+                track["cameraId"],
+                track["trackId"],
+                rule.zone_id,
+                False,
+                timestamp,
+            )
+
+
+def _sync_track_zone_transitions(
+    presence_tracker,
+    track: dict[str, Any],
+    zone_mapping: Optional[dict[str, Any]],
+    rules: list,
+    observation: dict[str, Any],
+) -> dict[str, Any]:
+    active_zone_ids = _active_zone_ids(zone_mapping)
+    monitored_zone_ids = {
+        rule.zone_id
+        for rule in rules
+        if rule.enabled and rule.rule_type in ("PERSON_ENTER", "PERSON_EXIT")
+    }
+    timestamp = observation.get("timestamp") or observation.get("created_at")
+    results = presence_tracker.apply_zones(
+        track["cameraId"],
+        track["trackId"],
+        active_zone_ids,
+        timestamp,
+        monitored_zone_ids,
+    )
+    return {zone_id: result.transition for zone_id, result in results.items()}
+
+
 def _evaluate_track_rules(
     db: Session,
     track: dict[str, Any],
     observation: dict[str, Any],
     zone_mapping: Optional[dict[str, Any]],
+    *,
+    is_new: bool = False,
 ) -> list[dict[str, Any]]:
     if not zone_mapping:
         return []
@@ -158,23 +218,22 @@ def _evaluate_track_rules(
         return hits
 
     presence_tracker = get_zone_presence_tracker()
-    transitions_by_zone: dict[str, str | None] = {}
+    if is_new:
+        _seed_track_zone_outside(presence_tracker, track, rules, observation)
+    transitions_by_zone = _sync_track_zone_transitions(
+        presence_tracker,
+        track,
+        zone_mapping,
+        rules,
+        observation,
+    )
 
     for rule in rules:
         if not rule.enabled:
             continue
 
-        is_inside = object_in_zone(zone_mapping, rule.zone_id)
-
         if rule.rule_type in ("PERSON_ENTER", "PERSON_EXIT") and track.get("class") == "person":
-            if rule.zone_id not in transitions_by_zone:
-                transitions_by_zone[rule.zone_id] = presence_tracker.update(
-                    track["cameraId"],
-                    track["trackId"],
-                    rule.zone_id,
-                    is_inside,
-                )
-            transition = transitions_by_zone[rule.zone_id]
+            transition = transitions_by_zone.get(rule.zone_id)
 
             if rule.rule_type == "PERSON_ENTER" and transition == PRESENCE_ENTER:
                 hits.append(
@@ -200,6 +259,7 @@ def _evaluate_track_rules(
                 )
             continue
 
+        is_inside = object_in_zone(zone_mapping, rule.zone_id)
         if not is_inside:
             continue
 

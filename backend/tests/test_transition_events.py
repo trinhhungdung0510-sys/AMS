@@ -59,7 +59,7 @@ class TransitionEventsTest(unittest.TestCase):
         }
 
         if previous_inside is False:
-            self.tracker.update("CAM-1", "T-1", "CZ-1", False)
+            self.tracker.update("CAM-1", "T-1", "CZ-1", False, "2026-06-20T10:00:00+00:00")
 
         return pipeline_subscribers._evaluate_track_rules(
             db=None,
@@ -75,12 +75,14 @@ class TransitionEventsTest(unittest.TestCase):
         self.assertNotIn("PERSON_EXIT", event_types)
 
     def test_inside_to_inside_is_silent(self) -> None:
-        self.tracker.update("CAM-1", "T-1", "CZ-1", True)
+        self.tracker.update("CAM-1", "T-1", "CZ-1", False, "2026-06-20T10:00:00+00:00")
+        self.tracker.update("CAM-1", "T-1", "CZ-1", True, "2026-06-20T10:01:00+00:00")
         hits = self._evaluate({"zones": ["CZ-1"], "subzones": []})
         self.assertEqual(hits, [])
 
     def test_inside_to_outside_generates_person_exit(self) -> None:
-        self.tracker.update("CAM-1", "T-1", "CZ-1", True)
+        self.tracker.update("CAM-1", "T-1", "CZ-1", False, "2026-06-20T10:00:00+00:00")
+        self.tracker.update("CAM-1", "T-1", "CZ-1", True, "2026-06-20T10:01:00+00:00")
         hits = self._evaluate({"zones": [], "subzones": []})
         event_types = [hit["eventType"] for hit in hits]
         self.assertIn("PERSON_EXIT", event_types)

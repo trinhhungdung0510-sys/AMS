@@ -7,6 +7,7 @@ function stateKey(cameraId, trackId) {
 function createEmptyState() {
   return {
     zoneEnteredAt: {},
+    zoneStates: {},
     dwellTriggered: {},
     transitions: [],
     ruleStates: {},
@@ -32,6 +33,12 @@ export class StateEngine {
     const next = {
       ...current,
       ...patch,
+    }
+
+    if ('zoneStates' in patch) {
+      next.zoneStates = { ...current.zoneStates, ...patch.zoneStates }
+    } else {
+      next.zoneStates = { ...current.zoneStates }
     }
 
     if ('zoneEnteredAt' in patch) {
@@ -161,6 +168,34 @@ export class StateEngine {
       zoneEnteredAt,
       transitions,
     })
+  }
+
+  syncZonePresence({
+    cameraId,
+    trackId,
+    activeZoneIds,
+    timestamp,
+    zonePresenceTracker,
+    monitoredZoneIds = null,
+  }) {
+    const results = zonePresenceTracker.applyZones(
+      cameraId,
+      trackId,
+      activeZoneIds,
+      timestamp,
+      monitoredZoneIds,
+    )
+
+    const zoneStates = {}
+    Object.entries(results).forEach(([zoneId, result]) => {
+      zoneStates[zoneId] = result.zoneState
+    })
+
+    return this.setState(cameraId, trackId, { zoneStates })
+  }
+
+  getZoneState(cameraId, trackId, zoneId) {
+    return this.getState(cameraId, trackId).zoneStates[zoneId] || null
   }
 
   getDwellSeconds(cameraId, trackId, zoneId, timestamp) {
