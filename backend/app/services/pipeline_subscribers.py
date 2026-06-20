@@ -39,7 +39,7 @@ def handle_observation_created(message: dict[str, Any]) -> None:
 
     db = SessionLocal()
     try:
-        camera_id = observation["camera_id"]
+        camera_id = observation.get("camera_id") or observation.get("cameraId")
         zones = [
             {
                 "id": zone.id,

@@ -3,6 +3,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.observation import OBJECT_CLASSES, OBSERVATION_SOURCES
+from app.core.observation_schema import DEFAULT_SCHEMA_VERSION, normalize_schema_version
 
 
 class BboxNormalized(BaseModel):
@@ -47,8 +48,14 @@ class ObservationCreate(BaseModel):
     frame_width: int = Field(ge=1, alias="frameWidth")
     frame_height: int = Field(ge=1, alias="frameHeight")
     objects: list[ObservationObject] = Field(default_factory=list)
+    schema_version: str = Field(default=DEFAULT_SCHEMA_VERSION, alias="schemaVersion", max_length=8)
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("schema_version")
+    @classmethod
+    def validate_schema_version(cls, value: str) -> str:
+        return normalize_schema_version(value)
 
     @field_validator("source")
     @classmethod
@@ -68,6 +75,7 @@ class ObservationResponse(BaseModel):
     frame_width: int
     frame_height: int
     objects: list[dict[str, Any]]
+    schema_version: str
     created_at: str
 
     model_config = ConfigDict(from_attributes=True)

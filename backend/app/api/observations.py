@@ -7,6 +7,11 @@ from app.schemas.event import EventEngineResponse
 from app.schemas.observation import EventEngineCreate, ObservationCreate, ObservationResponse
 from app.services.evaluator_event_service import create_event_from_evaluation
 from app.services.event_engine_service import event_to_engine_dict
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
+from app.services.observation_replay_service import observation_replay_service
 from app.services.observation_service import (
     create_observation,
     get_observation_or_none,
@@ -15,6 +20,18 @@ from app.services.observation_service import (
 )
 
 router = APIRouter(tags=["observations"], dependencies=[Depends(get_current_user)])
+
+
+class ObservationReplayRequest(BaseModel):
+    fixture: str = Field(min_length=1)
+    camera_id: Optional[str] = Field(default=None, max_length=20)
+    publish_only: bool = Field(default=False)
+
+
+class ObservationReplayBatchRequest(BaseModel):
+    fixture: str = Field(min_length=1)
+    camera_ids: list[str] = Field(min_length=1)
+    publish_only: bool = Field(default=False)
 
 
 def _to_response(observation) -> ObservationResponse:
@@ -75,3 +92,45 @@ def create_engine_event(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return EventEngineResponse(**event_to_engine_dict(db, event))
+
+
+@router.get("/observations/fixtures/list")
+def list_observation_fixtures() -> list[str]:
+    return observation_replay_service.list_fixtures()
+
+
+@router.post("/observations/replay")
+def replay_observation_fixture(
+    payload: ObservationReplayRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        return observation_replay_service.replay_fixture(
+            db,
+            payload.fixture,
+            camera_id=payload.camera_id,
+            publish_only=payload.publish_only,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post("/observations/replay/batch")
+def replay_observation_fixture_batch(
+    payload: ObservationReplayBatchRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        results = observation_replay_service.replay_many(
+            db,
+            payload.fixture,
+            camera_ids=payload.camera_ids,
+            publish_only=payload.publish_only,
+        )
+        return {"count": len(results), "results": results}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc

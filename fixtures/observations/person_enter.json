@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "v1",
+  "cameraId": "CAM-REPLAY-01",
+  "timestamp": "2026-06-23T10:00:00+00:00",
+  "source": "MOCK",
+  "frameWidth": 1920,
+  "frameHeight": 1080,
+  "objects": [
+    {
+      "trackId": "T-PERSON-01",
+      "class": "person",
+      "confidence": 0.93,
+      "bbox": { "x": 0.4, "y": 0.2, "width": 0.12, "height": 0.45 },
+      "attributes": { "helmet": true, "mask": true, "coverall": true }
+    }
+  ],
+  "expectedEvents": [
+    { "eventType": "PERSON_ENTER", "optional": true }
+  ]
+}

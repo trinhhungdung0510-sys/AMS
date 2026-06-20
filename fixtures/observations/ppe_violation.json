@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "v1",
+  "cameraId": "CAM-REPLAY-01",
+  "timestamp": "2026-06-23T10:00:03+00:00",
+  "source": "MOCK",
+  "frameWidth": 1920,
+  "frameHeight": 1080,
+  "objects": [
+    {
+      "trackId": "T-PPE-01",
+      "class": "person",
+      "confidence": 0.92,
+      "bbox": { "x": 0.38, "y": 0.18, "width": 0.14, "height": 0.48 },
+      "attributes": { "helmet": false, "mask": false, "coverall": true }
+    }
+  ],
+  "expectedEvents": [
+    { "eventType": "PPE_REQUIRED", "optional": true }
+  ]
+}

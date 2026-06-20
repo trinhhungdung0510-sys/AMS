@@ -18,6 +18,7 @@ from app.api.cameras import router as cameras_router
 from app.api.compliance import router as compliance_router
 from app.api.dashboard import router as dashboard_router
 from app.api.devices import router as devices_router
+from app.api.detectors import router as detectors_router
 from app.api.employees import router as employees_router
 from app.api.events import router as events_router
 from app.api.farm_zones import router as farm_zones_router
@@ -31,6 +32,7 @@ from app.api.notifications import router as notifications_router
 from app.api.observations import router as observations_router
 from app.api.realtime import router as realtime_router
 from app.api.biosecurity_rules import router as biosecurity_rules_router
+from app.api.runtime_metrics import router as runtime_metrics_router
 from app.api.rules import router as rules_router
 from app.api.smart_farm import router as smart_farm_router
 from app.api.snapshots import router as snapshots_router
@@ -46,6 +48,8 @@ from app.core.config import get_settings
 from app.services.event_stream_service import event_stream_service
 from app.services.pipeline_subscribers import register_pipeline_subscribers
 from app.services.rtsp_simulator import rtsp_simulator_worker
+from app.services.detector_runtime_service import register_default_detectors, shutdown_detectors
+from app.services.runtime_metrics_service import register_metrics_subscribers
 from app.services.camera_health_service import camera_health_service
 from app.database.session import SessionLocal
 from app.ws.event_gateway import router as ws_events_router
@@ -82,6 +86,7 @@ app.include_router(camera_zones_router, prefix=settings.api_prefix)
 app.include_router(camera_zone_rules_router, prefix=settings.api_prefix)
 app.include_router(compliance_router, prefix=settings.api_prefix)
 app.include_router(dashboard_router, prefix=settings.api_prefix)
+app.include_router(detectors_router, prefix=settings.api_prefix)
 app.include_router(devices_router, prefix=settings.api_prefix)
 app.include_router(events_router, prefix=settings.api_prefix)
 app.include_router(farms_router, prefix=settings.api_prefix)
@@ -106,6 +111,7 @@ app.include_router(tracks_router, prefix=settings.api_prefix)
 app.include_router(realtime_router)
 app.include_router(ws_events_router)
 app.include_router(biosecurity_rules_router, prefix=settings.api_prefix)
+app.include_router(runtime_metrics_router, prefix=settings.api_prefix)
 app.include_router(rules_router, prefix=settings.api_prefix)
 
 storage_root = Path(settings.storage_root)
@@ -121,6 +127,8 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_root)), name="uploads")
 @app.on_event("startup")
 async def start_rtsp_simulator() -> None:
     register_pipeline_subscribers()
+    register_metrics_subscribers()
+    register_default_detectors()
     event_stream_service.set_app_loop(asyncio.get_running_loop())
     event_stream_service.register()
     app.state.rtsp_stop_event = asyncio.Event()
@@ -143,6 +151,7 @@ async def _camera_health_monitor_worker(stop_event: asyncio.Event) -> None:
 
 @app.on_event("shutdown")
 async def stop_rtsp_simulator() -> None:
+    shutdown_detectors()
     if app.state.rtsp_task:
         app.state.rtsp_stop_event.set()
         app.state.rtsp_task.cancel()

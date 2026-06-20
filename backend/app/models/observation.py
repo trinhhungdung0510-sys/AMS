@@ -21,4 +21,5 @@ class Observation(Base):
     frame_width: Mapped[int] = mapped_column(Integer, nullable=False)
     frame_height: Mapped[int] = mapped_column(Integer, nullable=False)
     objects: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(8), nullable=False, default="v1")
     created_at: Mapped[str] = mapped_column(String(32), nullable=False)

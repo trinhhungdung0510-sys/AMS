@@ -17,6 +17,10 @@ TOPIC_TO_WS_TYPE = {
     topics.EVENT_CREATED: "event.created",
     topics.NOTIFICATION_CREATED: "notification.created",
     topics.CAMERA_STATUS_CHANGED: "camera.status",
+    topics.DETECTOR_STARTED: "detector.started",
+    topics.DETECTOR_STOPPED: "detector.stopped",
+    topics.DETECTOR_FAILED: "detector.failed",
+    topics.DETECTOR_RECOVERED: "detector.recovered",
 }
 
 

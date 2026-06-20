@@ -13,6 +13,7 @@ class ObservationSchemaValidationTest(unittest.TestCase):
             source="MOCK",
             frameWidth=1920,
             frameHeight=1080,
+            schemaVersion="v1",
             objects=[
                 ObservationObject(
                     trackId="T-1",

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Camera, Observation
 from app.schemas.observation import ObservationCreate
+from app.services.observation_validator import observation_validator
 from app.core.event_bus import get_event_bus
 from app.core.event_bus.event_types import OBSERVATION_CREATED
 
@@ -41,24 +42,28 @@ def observation_to_response_dict(observation: Observation) -> dict:
         "frame_width": observation.frame_width,
         "frame_height": observation.frame_height,
         "objects": observation.objects,
+        "schema_version": observation.schema_version,
         "created_at": observation.created_at,
     }
 
 
 def create_observation(db: Session, payload: ObservationCreate) -> Observation:
-    camera = db.get(Camera, payload.camera_id)
+    validated = observation_validator.validate(payload.model_dump(by_alias=True))
+
+    camera = db.get(Camera, validated.camera_id)
     if not camera:
         raise ValueError("Không tìm thấy camera")
 
     now = utc_now_iso()
     observation = Observation(
         id=new_observation_id(),
-        camera_id=payload.camera_id,
-        timestamp=payload.timestamp,
-        source=payload.source,
-        frame_width=payload.frame_width,
-        frame_height=payload.frame_height,
-        objects=_serialize_objects(payload.objects),
+        camera_id=validated.camera_id,
+        timestamp=validated.timestamp,
+        source=validated.source,
+        frame_width=validated.frame_width,
+        frame_height=validated.frame_height,
+        objects=_serialize_objects(validated.objects),
+        schema_version=validated.schema_version,
         created_at=now,
     )
     db.add(observation)

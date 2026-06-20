@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "v1",
+  "cameraId": "CAM-REPLAY-01",
+  "timestamp": "2026-06-23T10:00:01+00:00",
+  "source": "MOCK",
+  "frameWidth": 1920,
+  "frameHeight": 1080,
+  "objects": [
+    {
+      "trackId": "T-COUNT-01",
+      "class": "person",
+      "confidence": 0.91,
+      "bbox": { "x": 0.1, "y": 0.2, "width": 0.1, "height": 0.4 },
+      "attributes": {}
+    },
+    {
+      "trackId": "T-COUNT-02",
+      "class": "person",
+      "confidence": 0.89,
+      "bbox": { "x": 0.35, "y": 0.22, "width": 0.11, "height": 0.42 },
+      "attributes": {}
+    },
+    {
+      "trackId": "T-COUNT-03",
+      "class": "person",
+      "confidence": 0.87,
+      "bbox": { "x": 0.6, "y": 0.25, "width": 0.1, "height": 0.38 },
+      "attributes": {}
+    }
+  ],
+  "expectedEvents": [
+    { "eventType": "PERSON_COUNT", "optional": true }
+  ]
+}
