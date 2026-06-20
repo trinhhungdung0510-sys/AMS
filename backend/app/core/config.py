@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     camera_rtsp_test_timeout_seconds: int = 15
     camera_snapshot_timeout_seconds: int = 20
     uploads_root: str = "uploads"
+    yolo_model_path: str = "yolov8n.pt"
+    yolo_confidence: float = 0.5
+    yolo_fps_limit: float = 5.0
+    yolo_prefer_bytetrack: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

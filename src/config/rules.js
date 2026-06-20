@@ -1,5 +1,6 @@
 export const RULE_TYPES = [
   { value: 'PERSON_ENTER', label: 'Người vào vùng' },
+  { value: 'PERSON_EXIT', label: 'Người rời vùng' },
   { value: 'PERSON_DWELL', label: 'Người lưu lại vùng' },
   { value: 'PERSON_COUNT', label: 'Đếm số người' },
   { value: 'ANIMAL_ENTER', label: 'Động vật xâm nhập' },

@@ -1,23 +1,23 @@
 import { useEffect, useState } from 'react'
-import { useRealtimeEvents } from '../../hooks/useRealtimeEvents'
-import { formatDateTime } from '../../utils/formatters'
+import { useEventStore } from '../../context/EventStore'
 
-function extractEvent(payload) {
-  const data = payload?.payload || payload
-  return data?.event || null
+function formatEventTime(event) {
+  const value = event.occurredAt || `${event.date}T${event.time || '00:00'}`
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value || '--'
+  return parsed.toLocaleString('vi-VN')
 }
 
-function RealtimeEventFeed({ limit = 8, filterCameraId = null }) {
+function RealtimeEventFeed({ limit = 50, filterCameraId = null }) {
+  const { feedEvents, connected, loading, error, reload } = useEventStore()
   const [items, setItems] = useState([])
-  const { connected } = useRealtimeEvents({
-    filterCameraId,
-    eventTypes: ['event.created', 'event.updated'],
-    onMessage: (payload) => {
-      const event = extractEvent(payload)
-      if (!event) return
-      setItems((current) => [event, ...current.filter((item) => item.id !== event.id)].slice(0, limit))
-    },
-  })
+
+  useEffect(() => {
+    const filtered = filterCameraId
+      ? feedEvents.filter((item) => item.cameraId === filterCameraId)
+      : feedEvents
+    setItems(filtered.slice(0, limit))
+  }, [feedEvents, filterCameraId, limit])
 
   return (
     <aside className="realtime-feed panel panel--compact">
@@ -27,24 +27,35 @@ function RealtimeEventFeed({ limit = 8, filterCameraId = null }) {
           {connected ? 'Live' : 'Reconnecting...'}
         </span>
       </div>
-      {items.length === 0 ? (
+
+      {error ? (
+        <div className="realtime-feed__error">
+          <p>{error}</p>
+          <button type="button" className="btn btn--outline btn--sm" onClick={reload}>
+            Thử lại
+          </button>
+        </div>
+      ) : null}
+
+      {loading && items.length === 0 ? (
+        <p className="realtime-feed__empty">Đang tải sự kiện...</p>
+      ) : null}
+
+      {!loading && !error && items.length === 0 ? (
         <p className="realtime-feed__empty">Chưa có sự kiện realtime.</p>
-      ) : (
+      ) : null}
+
+      {items.length > 0 ? (
         <ul className="realtime-feed__list">
           {items.map((event) => (
             <li key={event.id} className="realtime-feed__item">
-              <strong>{event.event_type || event.alert_type}</strong>
-              <span>{event.zone_name || event.zone_id}</span>
-              <small>
-                {formatDateTime(
-                  (event.occurred_at || event.started_at || '').slice(0, 10),
-                  (event.occurred_at || event.started_at || '').slice(11, 19),
-                )}
-              </small>
+              <strong>{event.typeLabel || event.eventType}</strong>
+              <span>{event.zoneName || event.zoneId || event.cameraName}</span>
+              <small>{formatEventTime(event)}</small>
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
     </aside>
   )
 }

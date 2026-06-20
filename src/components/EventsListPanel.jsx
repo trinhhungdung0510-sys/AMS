@@ -1,40 +1,36 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Download, Search } from 'lucide-react'
-import { alertTypeOptions, events, severityLabels, statusLabels } from '../data/mockData'
+import { useEventStore } from '../context/EventStore'
+import { severityLabels, statusLabels } from '../data/mockData'
 import { exportRowsAsExcel, formatDateTime } from '../utils/formatters'
 
 const pageSize = 10
-const timeOptions = [
-  { value: 'all', label: 'Tất cả thời gian' },
-  { value: 'today', label: 'Hôm nay' },
-  { value: 'week', label: '7 ngày' },
-  { value: 'month', label: '30 ngày' },
-]
 
 function EventsListPanel() {
+  const { events, loading, error, reload } = useEventStore()
   const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState('all')
   const [timeFilter, setTimeFilter] = useState('all')
   const [page, setPage] = useState(1)
 
-  const filtered = events.filter((event) => {
+  const today = new Date().toISOString().slice(0, 10)
+
+  const filtered = useMemo(() => events.filter((event) => {
     const query = search.trim().toLowerCase()
     const matchSearch =
       query === '' ||
       event.typeLabel.toLowerCase().includes(query) ||
       event.cameraName.toLowerCase().includes(query) ||
-      event.zone.toLowerCase().includes(query) ||
+      (event.zoneName || '').toLowerCase().includes(query) ||
       event.handler.toLowerCase().includes(query)
 
-    const matchType = typeFilter === 'all' || event.type === typeFilter
     const matchTime =
       timeFilter === 'all' ||
-      (timeFilter === 'today' && event.date === '2026-06-17') ||
-      (timeFilter === 'week' && Number(event.date.slice(-2)) >= 11) ||
-      (timeFilter === 'month' && event.date.startsWith('2026-06'))
+      (timeFilter === 'today' && (event.date === today || event.occurredAt?.startsWith(today))) ||
+      (timeFilter === 'week' && event.date) ||
+      (timeFilter === 'month' && event.date?.startsWith(today.slice(0, 7)))
 
-    return matchSearch && matchType && matchTime
-  })
+    return matchSearch && matchTime
+  }), [events, search, timeFilter, today])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -42,14 +38,14 @@ function EventsListPanel() {
 
   const exportExcel = () => {
     exportRowsAsExcel(
-      'ams-events-v0.4.xls',
+      'ams-events.xls',
       filtered.map((event) => ({
         'Thời gian': formatDateTime(event.date, event.time),
         'Loại cảnh báo': event.typeLabel,
         Camera: event.cameraName,
-        'Khu vực': event.zone,
-        'Mức độ': severityLabels[event.severity],
-        'Trạng thái': statusLabels[event.status],
+        'Khu vực': event.zoneName,
+        'Mức độ': severityLabels[event.severity] || event.severityRaw,
+        'Trạng thái': statusLabels[event.status] || event.statusRaw,
         'Người xử lý': event.handler,
         'AI (%)': event.confidence,
       })),
@@ -58,6 +54,15 @@ function EventsListPanel() {
 
   return (
     <div className="events-page events-page--embedded">
+      {error ? (
+        <div className="realtime-feed__error">
+          <p>{error}</p>
+          <button type="button" className="btn btn--outline btn--sm" onClick={reload}>
+            Tải lại sự kiện
+          </button>
+        </div>
+      ) : null}
+
       <div className="toolbar">
         <div className="toolbar__left">
           <div className="search-box">
@@ -77,28 +82,16 @@ function EventsListPanel() {
         <div className="toolbar__right">
           <select
             className="toolbar__select"
-            value={typeFilter}
-            onChange={(event) => {
-              setTypeFilter(event.target.value)
-              setPage(1)
-            }}
-          >
-            <option value="all">Tất cả loại</option>
-            {alertTypeOptions.map((item) => (
-              <option key={item.value} value={item.value}>{item.label}</option>
-            ))}
-          </select>
-          <select
-            className="toolbar__select"
             value={timeFilter}
             onChange={(event) => {
               setTimeFilter(event.target.value)
               setPage(1)
             }}
           >
-            {timeOptions.map((item) => (
-              <option key={item.value} value={item.value}>{item.label}</option>
-            ))}
+            <option value="all">Tất cả thời gian</option>
+            <option value="today">Hôm nay</option>
+            <option value="week">7 ngày</option>
+            <option value="month">30 ngày</option>
           </select>
           <button type="button" className="btn btn--outline" onClick={exportExcel}>
             <Download size={16} />
@@ -108,44 +101,52 @@ function EventsListPanel() {
       </div>
 
       <section className="panel panel--flush">
-        <div className="table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Thời gian</th>
-                <th>Loại cảnh báo</th>
-                <th>Camera</th>
-                <th>Khu vực</th>
-                <th>Mức độ</th>
-                <th>Trạng thái</th>
-                <th>Người xử lý</th>
-                <th>AI</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((event) => (
-                <tr key={event.id}>
-                  <td className="data-table__time">{formatDateTime(event.date, event.time)}</td>
-                  <td className="data-table__desc">{event.typeLabel}</td>
-                  <td>{event.cameraName}</td>
-                  <td>{event.zone}</td>
-                  <td>
-                    <span className={`badge badge--${event.severity}`}>
-                      {severityLabels[event.severity]}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`status-tag status-tag--${event.status}`}>
-                      {statusLabels[event.status]}
-                    </span>
-                  </td>
-                  <td>{event.handler}</td>
-                  <td><span className="confidence-pill">{event.confidence}%</span></td>
+        {loading && rows.length === 0 ? (
+          <p className="realtime-feed__empty">Đang tải sự kiện...</p>
+        ) : null}
+
+        {!loading && rows.length === 0 ? (
+          <p className="realtime-feed__empty">Không có sự kiện phù hợp bộ lọc.</p>
+        ) : (
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Thời gian</th>
+                  <th>Loại cảnh báo</th>
+                  <th>Camera</th>
+                  <th>Khu vực</th>
+                  <th>Mức độ</th>
+                  <th>Trạng thái</th>
+                  <th>Người xử lý</th>
+                  <th>AI</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((event) => (
+                  <tr key={event.id}>
+                    <td className="data-table__time">{formatDateTime(event.date, event.time)}</td>
+                    <td className="data-table__desc">{event.typeLabel}</td>
+                    <td>{event.cameraName}</td>
+                    <td>{event.zoneName}</td>
+                    <td>
+                      <span className={`badge badge--${event.severity}`}>
+                        {severityLabels[event.severity] || event.severityRaw}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`status-tag status-tag--${event.status}`}>
+                        {statusLabels[event.status] || event.statusRaw}
+                      </span>
+                    </td>
+                    <td>{event.handler}</td>
+                    <td><span className="confidence-pill">{event.confidence}%</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="table-footer">
           <span className="table-footer__info">

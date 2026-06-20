@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, ArrowRightLeft, Camera, GitBranch, ShieldAlert, Wifi } from 'lucide-react'
+import { Activity, ArrowRightLeft, GitBranch, ShieldAlert, Wifi } from 'lucide-react'
 import {
   Cell,
   Line,
@@ -14,15 +14,13 @@ import {
 import {
   alertDistribution,
   alertTrend,
-  cameras,
-  events,
   getTopCameras,
   getTopZones,
-  onlineCameraCount,
 } from '../data/mockData'
 
 import { LOGO_SRC } from '../components/BrandLogo'
 import RealtimeDashboardWidgets from '../components/realtime/RealtimeDashboardWidgets'
+import { useEventStore } from '../context/EventStore'
 import { API_BASE_URL } from '../config/api'
 
 const COLORS = ['#0B6B1B', '#F36A10', '#dc2626', '#facc15', '#64748b']
@@ -51,16 +49,16 @@ function formatCrossTime(value) {
 }
 
 function DashboardPage() {
+  const { metrics } = useEventStore()
   const [recentCrossings, setRecentCrossings] = useState([])
   const [workflowCompliance, setWorkflowCompliance] = useState(null)
   const [workflowDashboard, setWorkflowDashboard] = useState(null)
   const [atshSummary, setAtshSummary] = useState(null)
-  const criticalCount = events.filter((event) => ['danger', 'critical'].includes(event.severity)).length
   const stats = [
-    { label: 'Camera', value: cameras.length, icon: Camera, tone: 'green' },
-    { label: 'Sự kiện AI', value: events.length, icon: ShieldAlert, tone: 'orange' },
-    { label: 'Cảnh báo nghiêm trọng', value: criticalCount, icon: Activity, tone: 'red' },
-    { label: 'Camera trực tuyến', value: `${onlineCameraCount}/${cameras.length}`, icon: Wifi, tone: 'green' },
+    { label: 'Event đang mở', value: metrics.openEvents, icon: ShieldAlert, tone: 'orange' },
+    { label: 'Event nghiêm trọng', value: metrics.criticalEvents, icon: Activity, tone: 'red' },
+    { label: 'Sự kiện hôm nay', value: metrics.totalEventsToday, icon: Activity, tone: 'green' },
+    { label: 'Camera online', value: `${metrics.onlineCameras}/${metrics.totalCameras}`, icon: Wifi, tone: 'green' },
   ]
 
   useEffect(() => {

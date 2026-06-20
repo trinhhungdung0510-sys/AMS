@@ -8,9 +8,13 @@ function resolveApiBaseUrl() {
   if (typeof window !== 'undefined') {
     const { hostname } = window.location
 
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return `http://${hostname}:8000`
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://127.0.0.1:8000'
     }
+
+    console.warn(
+      '[AMS] Thiếu VITE_API_URL — WebSocket realtime có thể không hoạt động trên production.',
+    )
   }
 
   return 'http://127.0.0.1:8000'

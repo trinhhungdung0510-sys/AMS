@@ -42,6 +42,15 @@ class EventStreamService:
         self._registered = True
         logger.info("EventStreamService registered on EventBus")
 
+    async def _broadcast_all(self, message: dict[str, Any]) -> None:
+        await events_manager.broadcast(message)
+        try:
+            from app.api.realtime import dashboard_manager
+
+            await dashboard_manager.broadcast(message)
+        except Exception:
+            logger.exception("Dashboard WS broadcast failed")
+
     def _forward_to_websocket(self, payload: dict[str, Any]) -> None:
         topic = payload.get("topic")
         ws_type = TOPIC_TO_WS_TYPE.get(topic, topic)
@@ -53,12 +62,12 @@ class EventStreamService:
         }
 
         if self._loop and self._loop.is_running():
-            asyncio.run_coroutine_threadsafe(events_manager.broadcast(message), self._loop)
+            asyncio.run_coroutine_threadsafe(self._broadcast_all(message), self._loop)
             return
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(events_manager.broadcast(message))
+            loop.create_task(self._broadcast_all(message))
         except RuntimeError:
             logger.warning("Skipped WS broadcast — no running event loop for topic=%s", topic)
 

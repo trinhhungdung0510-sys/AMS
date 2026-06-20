@@ -1,11 +1,8 @@
-from app.api.deps import get_current_user
 import asyncio
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-router = APIRouter(tags=["realtime"],
-    dependencies=[Depends(get_current_user)]
-)
+router = APIRouter(tags=["realtime"])
 
 
 class ConnectionManager:

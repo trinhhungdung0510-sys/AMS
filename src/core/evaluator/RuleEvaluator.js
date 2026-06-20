@@ -56,12 +56,10 @@ export class PersonEnterEvaluator extends RuleEvaluator {
   }
 
   evaluate(context) {
-    const { track, state, observation, rule, zone, zoneMapping, object } = context
+    const { track, observation, rule, zone, zoneMapping, object, transition } = context
     if (!track || !object || !this.isTrackInRuleZone(context)) return []
     if (!this.matchesClass(track, object, 'person')) return []
-
-    const ruleState = state.ruleStates?.[rule.id] || {}
-    if (ruleState.enterTriggered && ruleState.zoneId === zone.id) return []
+    if (transition !== 'enter') return []
 
     return [{
       ruleId: rule.id,
@@ -72,16 +70,33 @@ export class PersonEnterEvaluator extends RuleEvaluator {
       metadata: {
         trackId: resolveTrackId(object),
         evaluator: this.ruleType,
+        transition: 'OUTSIDE->INSIDE',
         firstSeenAt: track.firstSeenAt,
       },
-      statePatch: {
-        ruleStates: {
-          [rule.id]: {
-            enterTriggered: true,
-            zoneId: zone.id,
-            triggeredAt: observation.timestamp || observation.created_at,
-          },
-        },
+    }]
+  }
+}
+
+export class PersonExitEvaluator extends RuleEvaluator {
+  get ruleType() {
+    return 'PERSON_EXIT'
+  }
+
+  evaluate(context) {
+    const { track, object, rule, zone, transition } = context
+    if (!track || !object || !this.matchesClass(track, object, 'person')) return []
+    if (transition !== 'exit') return []
+
+    return [{
+      ruleId: rule.id,
+      zoneId: zone.id,
+      eventType: rule.rule_type,
+      severity: rule.severity,
+      confidenceScore: object.confidence,
+      metadata: {
+        trackId: resolveTrackId(object),
+        evaluator: this.ruleType,
+        transition: 'INSIDE->OUTSIDE',
       },
     }]
   }

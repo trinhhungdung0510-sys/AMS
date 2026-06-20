@@ -35,15 +35,11 @@ import {
 } from '../data/farmControlDashboard'
 import { getDashboardMapFromDesigner, subscribeFarmMapUpdates } from '../data/farmMapSync'
 import { atshViolations, computeAtshKpis } from '../data/atshViolations'
-import { useDashboardWebSocket } from '../hooks/useDashboardWebSocket'
+import { useEventStore } from '../context/EventStore'
 import { API_BASE_URL } from '../config/api'
 
-function formatTime(date) {
-  if (!date) return '--'
-  return date.toLocaleTimeString('vi-VN')
-}
-
 function FarmControlDashboardPage() {
+  const { feedEvents, metrics, connected, loading: eventsLoading } = useEventStore()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') === 'ban-do' ? 'ban-do' : 'tong-quan'
 
@@ -51,14 +47,11 @@ function FarmControlDashboardPage() {
   const [atshScore, setAtshScore] = useState(defaults.atshScore)
   const [violationsToday, setViolationsToday] = useState(defaults.violationsToday)
   const [diseaseRisk, setDiseaseRisk] = useState(defaults.diseaseRisk)
-  const [activeCameras, setActiveCameras] = useState(defaults.activeCameras)
-  const [totalCameras, setTotalCameras] = useState(defaults.totalCameras)
   const [deductions, setDeductions] = useState(defaults.deductions)
   const [topZones, setTopZones] = useState(defaults.topZones)
   const [topCameras, setTopCameras] = useState(defaults.topCameras)
   const [topRules, setTopRules] = useState(defaults.topRules)
   const [chartRange, setChartRange] = useState('day')
-  const [pulse, setPulse] = useState(0)
   const [mapData, setMapData] = useState(() => getDashboardMapFromDesigner())
 
   const refreshFromData = useCallback((violations) => {
@@ -70,7 +63,6 @@ function FarmControlDashboardPage() {
     setTopZones(buildTopZones(violations))
     setTopCameras(buildTopCameras(violations))
     setTopRules(buildTopRules(violations))
-    setPulse((value) => value + 1)
   }, [])
 
   const loadDashboard = useCallback(async () => {
@@ -95,9 +87,7 @@ function FarmControlDashboardPage() {
       }
 
       if (dashRes.ok) {
-        const dash = await dashRes.json()
-        setActiveCameras(dash.camera_truc_tuyen ?? defaults.activeCameras)
-        setTotalCameras(dash.tong_camera ?? defaults.totalCameras)
+        await dashRes.json()
       }
 
       if (zonesRes.ok) {
@@ -116,7 +106,7 @@ function FarmControlDashboardPage() {
     } catch {
       refreshFromData(atshViolations)
     }
-  }, [defaults.activeCameras, defaults.totalCameras, refreshFromData])
+  }, [refreshFromData])
 
   useEffect(() => {
     loadDashboard()
@@ -126,21 +116,14 @@ function FarmControlDashboardPage() {
 
   useEffect(() => subscribeFarmMapUpdates(setMapData), [])
 
-  const handleSocketMessage = useCallback(() => {
-    refreshFromData(atshViolations)
-    loadDashboard()
-  }, [loadDashboard, refreshFromData])
-
-  const { connected, lastUpdate } = useDashboardWebSocket(handleSocketMessage)
-
   const chartData = CHART_DATA[chartRange]
   const scoreTone = atshScore >= 80 ? 'safe' : atshScore >= 60 ? 'attention' : 'risk'
 
   const stats = [
     { label: 'Điểm ATSH', value: `${atshScore}`, suffix: '/100', icon: ShieldCheck, tone: scoreTone },
-    { label: 'Vi phạm hôm nay', value: violationsToday, icon: AlertTriangle, tone: violationsToday > 8 ? 'risk' : 'attention' },
-    { label: 'Nguy cơ dịch bệnh', value: diseaseRisk.label, icon: Activity, tone: diseaseRisk.tone },
-    { label: 'Camera đang hoạt động', value: `${activeCameras}/${totalCameras}`, icon: Camera, tone: 'safe' },
+    { label: 'Event đang mở', value: metrics.openEvents, icon: AlertTriangle, tone: metrics.openEvents > 0 ? 'attention' : 'safe' },
+    { label: 'Event nghiêm trọng', value: metrics.criticalEvents, icon: Activity, tone: metrics.criticalEvents > 0 ? 'risk' : 'safe' },
+    { label: 'Camera online', value: `${metrics.onlineCameras}/${metrics.totalCameras}`, icon: Camera, tone: 'safe' },
   ]
 
   return (
@@ -154,7 +137,7 @@ function FarmControlDashboardPage() {
         <div className={`farm-control__live${connected ? ' farm-control__live--on' : ''}`}>
           {connected ? <Wifi size={16} /> : <WifiOff size={16} />}
           <span>{connected ? 'Cập nhật thời gian thực' : 'Đang kết nối WebSocket...'}</span>
-          <small>{formatTime(lastUpdate)}{pulse ? ` · #${pulse}` : ''}</small>
+          <small>{metrics.totalEventsToday} sự kiện hôm nay</small>
         </div>
       </header>
 
@@ -279,6 +262,31 @@ function FarmControlDashboardPage() {
                 </ul>
               </article>
             ))}
+          </section>
+
+          <section className="panel panel--compact farm-control__events">
+            <div className="panel__header">
+              <h2>Sự kiện AI realtime</h2>
+              <span className={`realtime-feed__status${connected ? ' realtime-feed__status--online' : ''}`}>
+                {connected ? 'Live' : 'Reconnecting...'}
+              </span>
+            </div>
+            {eventsLoading && feedEvents.length === 0 ? (
+              <p className="realtime-feed__empty">Đang tải sự kiện...</p>
+            ) : null}
+            {feedEvents.length === 0 && !eventsLoading ? (
+              <p className="realtime-feed__empty">Chưa có sự kiện AI.</p>
+            ) : (
+              <ul className="realtime-feed__list">
+                {feedEvents.slice(0, 8).map((event) => (
+                  <li key={event.id} className="realtime-feed__item">
+                    <strong>{event.typeLabel || event.eventType}</strong>
+                    <span>{event.zoneName || event.cameraName}</span>
+                    <small>{event.occurredAt ? new Date(event.occurredAt).toLocaleString('vi-VN') : `${event.date} ${event.time}`}</small>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="farm-control__chart panel panel--chart">

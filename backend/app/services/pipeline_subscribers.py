@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.event_bus import get_event_bus
 from app.core.event_bus import event_types as topics
+from app.core.runtime.zone_presence_tracker import PRESENCE_ENTER, PRESENCE_EXIT, get_zone_presence_tracker
 from app.core.runtime.track_store import get_track_store
 from app.core.runtime.zone_mapper import map_observation_to_zones, object_in_zone
 from app.database.session import SessionLocal
@@ -156,15 +157,53 @@ def _evaluate_track_rules(
     if not obj:
         return hits
 
+    presence_tracker = get_zone_presence_tracker()
+    transitions_by_zone: dict[str, str | None] = {}
+
     for rule in rules:
         if not rule.enabled:
             continue
-        if not object_in_zone(zone_mapping, rule.zone_id):
+
+        is_inside = object_in_zone(zone_mapping, rule.zone_id)
+
+        if rule.rule_type in ("PERSON_ENTER", "PERSON_EXIT") and track.get("class") == "person":
+            if rule.zone_id not in transitions_by_zone:
+                transitions_by_zone[rule.zone_id] = presence_tracker.update(
+                    track["cameraId"],
+                    track["trackId"],
+                    rule.zone_id,
+                    is_inside,
+                )
+            transition = transitions_by_zone[rule.zone_id]
+
+            if rule.rule_type == "PERSON_ENTER" and transition == PRESENCE_ENTER:
+                hits.append(
+                    _build_hit(
+                        rule,
+                        track,
+                        observation,
+                        obj,
+                        confidence=obj.get("confidence", 0.9),
+                        extra={"transition": "OUTSIDE->INSIDE"},
+                    )
+                )
+            elif rule.rule_type == "PERSON_EXIT" and transition == PRESENCE_EXIT:
+                hits.append(
+                    _build_hit(
+                        rule,
+                        track,
+                        observation,
+                        obj,
+                        confidence=obj.get("confidence", 0.9),
+                        extra={"transition": "INSIDE->OUTSIDE"},
+                    )
+                )
             continue
 
-        if rule.rule_type == "PERSON_ENTER" and track.get("class") == "person":
-            hits.append(_build_hit(rule, track, observation, obj, confidence=obj.get("confidence", 0.9)))
-        elif rule.rule_type == "ANIMAL_ENTER" and track.get("class") == "animal":
+        if not is_inside:
+            continue
+
+        if rule.rule_type == "ANIMAL_ENTER" and track.get("class") == "animal":
             hits.append(_build_hit(rule, track, observation, obj, confidence=obj.get("confidence", 0.9)))
         elif rule.rule_type == "PPE_REQUIRED" and track.get("class") == "person":
             required = (rule.config or {}).get("requiredPPE") or (rule.config or {}).get("required_ppe") or []

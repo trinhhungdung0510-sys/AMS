@@ -11,6 +11,7 @@ from app.database.base import Base
 
 RULE_TYPES = {
     "PERSON_ENTER",
+    "PERSON_EXIT",
     "PERSON_DWELL",
     "PERSON_COUNT",
     "ANIMAL_ENTER",

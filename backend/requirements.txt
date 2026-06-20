@@ -8,3 +8,5 @@ pydantic-settings
 psycopg[binary]
 redis
 Pillow
+
+# Optional AI stack for YOLO worker — see requirements-ai.txt

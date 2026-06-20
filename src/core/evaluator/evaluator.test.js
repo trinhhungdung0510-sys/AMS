@@ -4,9 +4,11 @@ import {
   PersonCountEvaluator,
   PersonDwellEvaluator,
   PersonEnterEvaluator,
+  PersonExitEvaluator,
 } from './RuleEvaluator'
 import { TrackStore } from '../tracking/TrackStore'
 import { StateEngine } from '../runtime/StateEngine'
+import { ZonePresenceTracker } from '../runtime/ZonePresenceTracker'
 import { syncRuntimeFromObservation } from '../runtime/syncRuntime'
 
 const zone = { id: 'CZ-1', name: 'Main' }
@@ -14,6 +16,13 @@ const ruleEnter = {
   id: 'ZR-ENTER',
   rule_type: 'PERSON_ENTER',
   severity: 'MEDIUM',
+  enabled: true,
+  zone_id: 'CZ-1',
+}
+const ruleExit = {
+  id: 'ZR-EXIT',
+  rule_type: 'PERSON_EXIT',
+  severity: 'LOW',
   enabled: true,
   zone_id: 'CZ-1',
 }
@@ -43,10 +52,10 @@ function buildObservation(objects, timestamp = '2026-06-22T10:00:00Z') {
   }
 }
 
-describe('PersonEnterEvaluator (track + state context)', () => {
+describe('PersonEnterEvaluator (transition-based)', () => {
   const evaluator = new PersonEnterEvaluator()
 
-  it('fires once per track per zone using state', () => {
+  it('fires only on enter transition', () => {
     const track = {
       trackId: 'T-1',
       cameraId: 'CAM-1',
@@ -70,16 +79,45 @@ describe('PersonEnterEvaluator (track + state context)', () => {
       object: objectItem,
       tracksInZone: [],
       stateEngine: null,
+      transition: 'enter',
     }
 
-    const first = evaluator.evaluate(context)
-    expect(first).toHaveLength(1)
+    expect(evaluator.evaluate(context)).toHaveLength(1)
+    expect(evaluator.evaluate({ ...context, transition: null })).toHaveLength(0)
+  })
+})
 
-    const second = evaluator.evaluate({
-      ...context,
-      state: { ruleStates: { 'ZR-ENTER': { enterTriggered: true, zoneId: 'CZ-1' } } },
+describe('PersonExitEvaluator (transition-based)', () => {
+  const evaluator = new PersonExitEvaluator()
+
+  it('fires only on exit transition', () => {
+    const track = {
+      trackId: 'T-1',
+      cameraId: 'CAM-1',
+      class: 'person',
+      currentZoneId: null,
+    }
+    const objectItem = {
+      trackId: 'T-1',
+      class: 'person',
+      confidence: 0.9,
+    }
+
+    const hits = evaluator.evaluate({
+      track,
+      state: {},
+      observation: buildObservation([objectItem]),
+      rule: ruleExit,
+      zone,
+      zoneMapping: { objectId: 'T-1', zones: [], subzones: [] },
+      object: objectItem,
+      tracksInZone: [],
+      stateEngine: null,
+      transition: 'exit',
     })
-    expect(second).toHaveLength(0)
+
+    expect(hits).toHaveLength(1)
+    expect(hits[0].eventType).toBe('PERSON_EXIT')
   })
 })
 
@@ -171,22 +209,24 @@ describe('PersonDwellEvaluator', () => {
 })
 
 describe('EvaluatorEngine runtime integration', () => {
-  it('uses TrackStore and StateEngine during evaluation', () => {
+  it('uses transition tracker for enter/exit and keeps PERSON_COUNT', () => {
     const trackStore = new TrackStore()
     const stateEngine = new StateEngine()
-    const engine = new EvaluatorEngine([new PersonEnterEvaluator(), new PersonCountEvaluator()])
+    const presenceTracker = new ZonePresenceTracker()
+    const engine = new EvaluatorEngine(
+      [new PersonEnterEvaluator(), new PersonExitEvaluator(), new PersonCountEvaluator()],
+      presenceTracker,
+    )
 
-    const observation = buildObservation([
-      { trackId: 'A', class: 'person', confidence: 0.9, bbox: { x: 0.1, y: 0.1, width: 0.1, height: 0.2 } },
-      { trackId: 'B', class: 'person', confidence: 0.85, bbox: { x: 0.3, y: 0.1, width: 0.1, height: 0.2 } },
-      { trackId: 'C', class: 'person', confidence: 0.8, bbox: { x: 0.5, y: 0.1, width: 0.1, height: 0.2 } },
-    ])
+    const objectItem = {
+      trackId: 'A',
+      class: 'person',
+      confidence: 0.9,
+      bbox: { x: 0.1, y: 0.1, width: 0.1, height: 0.2 },
+    }
 
-    const zoneMappings = [
-      { objectId: 'A', zones: ['CZ-1'], subzones: [] },
-      { objectId: 'B', zones: ['CZ-1'], subzones: [] },
-      { objectId: 'C', zones: ['CZ-1'], subzones: [] },
-    ]
+    const observation = buildObservation([objectItem])
+    const zoneMappings = [{ objectId: 'A', zones: ['CZ-1'], subzones: [] }]
 
     syncRuntimeFromObservation({
       observation,
@@ -196,17 +236,57 @@ describe('EvaluatorEngine runtime integration', () => {
       stateEngine,
     })
 
-    const hits = engine.evaluate({
+    const firstPass = engine.evaluate({
       observation,
-      rules: [ruleEnter, ruleCount],
+      rules: [ruleEnter, ruleExit, ruleCount],
       zones: [zone],
       zoneMappings,
       trackStore,
       stateEngine,
     })
 
-    expect(hits.some((hit) => hit.eventType === 'PERSON_ENTER')).toBe(true)
-    expect(hits.some((hit) => hit.eventType === 'PERSON_COUNT')).toBe(true)
-    expect(trackStore.getTracksByCamera('CAM-1')).toHaveLength(3)
+    expect(firstPass.some((hit) => hit.eventType === 'PERSON_ENTER')).toBe(true)
+    expect(firstPass.some((hit) => hit.eventType === 'PERSON_COUNT')).toBe(false)
+
+    const secondPass = engine.evaluate({
+      observation,
+      rules: [ruleEnter, ruleExit, ruleCount],
+      zones: [zone],
+      zoneMappings,
+      trackStore,
+      stateEngine,
+    })
+
+    expect(secondPass.some((hit) => hit.eventType === 'PERSON_ENTER')).toBe(false)
+
+    const crowdedObservation = buildObservation([
+      objectItem,
+      { trackId: 'B', class: 'person', confidence: 0.85, bbox: { x: 0.3, y: 0.1, width: 0.1, height: 0.2 } },
+      { trackId: 'C', class: 'person', confidence: 0.8, bbox: { x: 0.5, y: 0.1, width: 0.1, height: 0.2 } },
+    ])
+    const crowdedMappings = [
+      { objectId: 'A', zones: ['CZ-1'], subzones: [] },
+      { objectId: 'B', zones: ['CZ-1'], subzones: [] },
+      { objectId: 'C', zones: ['CZ-1'], subzones: [] },
+    ]
+
+    syncRuntimeFromObservation({
+      observation: crowdedObservation,
+      zones: [zone],
+      zoneMappings: crowdedMappings,
+      trackStore,
+      stateEngine,
+    })
+
+    const crowdedHits = engine.evaluate({
+      observation: crowdedObservation,
+      rules: [ruleEnter, ruleCount],
+      zones: [zone],
+      zoneMappings: crowdedMappings,
+      trackStore,
+      stateEngine,
+    })
+
+    expect(crowdedHits.some((hit) => hit.eventType === 'PERSON_COUNT')).toBe(true)
   })
 })

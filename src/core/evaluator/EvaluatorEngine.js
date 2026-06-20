@@ -7,11 +7,14 @@ import {
   PersonCountEvaluator,
   PersonDwellEvaluator,
   PersonEnterEvaluator,
+  PersonExitEvaluator,
   PpeRequiredEvaluator,
 } from './RuleEvaluator'
+import { defaultZonePresenceTracker } from '../runtime/ZonePresenceTracker'
 
 const EVALUATORS = [
   new PersonEnterEvaluator(),
+  new PersonExitEvaluator(),
   new PersonDwellEvaluator(),
   new PersonCountEvaluator(),
   new AnimalEnterEvaluator(),
@@ -20,10 +23,21 @@ const EVALUATORS = [
 ]
 
 export class EvaluatorEngine {
-  constructor(evaluators = EVALUATORS) {
+  constructor(evaluators = EVALUATORS, zonePresenceTracker = defaultZonePresenceTracker) {
     this.evaluators = evaluators
+    this.zonePresenceTracker = zonePresenceTracker
     this.evaluatorByType = Object.fromEntries(
       evaluators.map((evaluator) => [evaluator.ruleType, evaluator]),
+    )
+  }
+
+  resolveTrackInZone(track, zoneMapping, zoneId) {
+    if (!track || !zoneMapping) return false
+    return (
+      zoneMapping.zones.includes(zoneId) ||
+      zoneMapping.subzones.includes(zoneId) ||
+      track.currentZoneId === zoneId ||
+      track.currentSubZoneId === zoneId
     )
   }
 
@@ -38,6 +52,18 @@ export class EvaluatorEngine {
     const zoneById = Object.fromEntries((zones || []).map((zone) => [zone.id, zone]))
     const cameraId = observation.camera_id || observation.cameraId
     const results = []
+    const transitionByTrackZone = new Map()
+
+    const resolveTransition = (trackId, zoneId, isInside) => {
+      const cacheKey = `${trackId}:${zoneId}`
+      if (!transitionByTrackZone.has(cacheKey)) {
+        transitionByTrackZone.set(
+          cacheKey,
+          this.zonePresenceTracker.update(cameraId, trackId, zoneId, isInside),
+        )
+      }
+      return transitionByTrackZone.get(cacheKey)
+    }
 
     ;(rules || [])
       .filter((rule) => rule.enabled)
@@ -82,6 +108,8 @@ export class EvaluatorEngine {
 
           const zoneMapping = findMappingForObject(zoneMappings, trackId)
           const state = stateEngine?.getState(cameraId, trackId) || {}
+          const isInside = this.resolveTrackInZone(track, zoneMapping, rule.zone_id)
+          const transition = resolveTransition(trackId, rule.zone_id, isInside)
 
           const hits = evaluator.evaluate({
             track,
@@ -93,6 +121,7 @@ export class EvaluatorEngine {
             object: objectItem,
             tracksInZone: [],
             stateEngine,
+            transition,
           })
 
           applyEvaluationStatePatches(stateEngine, track, hits)

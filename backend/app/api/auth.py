@@ -17,6 +17,19 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    import logging
+    import os
+
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    logging.getLogger("ams.auth.debug").warning(
+        "[AUTH DEBUG login] pid=%s secret_hash=%s jwt_secret_key_len=%s",
+        os.getpid(),
+        __import__("hashlib").sha256(settings.jwt_secret_key.encode()).hexdigest()[:12],
+        len(settings.jwt_secret_key),
+    )
+
     user = db.scalar(select(User).where(User.email == payload.email, User.is_active.is_(True)))
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(

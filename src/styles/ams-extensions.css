@@ -2880,6 +2880,22 @@
   font-size: 13px;
 }
 
+.realtime-feed__error {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 13px;
+}
+
+.realtime-feed__error p {
+  margin: 0;
+}
+
 .realtime-dashboard {
   margin-bottom: 16px;
   display: grid;
@@ -2900,4 +2916,55 @@
   .realtime-feed {
     position: static;
   }
+}
+
+.ams-toast-stack {
+  position: fixed;
+  top: 88px;
+  right: 20px;
+  z-index: 9999;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.ams-toast {
+  pointer-events: auto;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-left-width: 4px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ams-toast strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.ams-toast span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.ams-toast--critical,
+.ams-toast--high {
+  border-left-color: #dc2626;
+}
+
+.ams-toast--medium,
+.ams-toast--attention {
+  border-left-color: #f97316;
+}
+
+.ams-toast--low,
+.ams-toast--safe,
+.ams-toast--green {
+  border-left-color: #0b6b1b;
 }
