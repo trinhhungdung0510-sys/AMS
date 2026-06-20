@@ -5,13 +5,14 @@ from app.api.deps import get_current_user
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.data.zone_designer_catalog import ATSH_LEVEL_COLORS, ATSH_LEVEL_LABELS, ZONE_DESIGNER_TYPES
 from app.database.session import get_db
 from app.models import ZonePolygon
+from app.schemas.camera_editor_zone import CameraEditorZoneUpdate
 from app.schemas.zone import (
     ZoneClassificationResponse,
     ZonePolygonCreate,
@@ -19,6 +20,12 @@ from app.schemas.zone import (
     ZonePolygonUpdate,
     ZoneTemplateItemResponse,
     ZoneTypeOptionResponse,
+)
+from app.services.camera_editor_zone_service import (
+    delete_editor_zone,
+    get_editor_zone_or_none,
+    update_editor_zone,
+    zone_to_response_dict as editor_zone_to_response_dict,
 )
 from app.services.zone_designer_engine import (
     resolve_color,
@@ -128,9 +135,19 @@ def create_zone(payload: ZonePolygonCreate, db: Session = Depends(get_db)) -> Zo
     return _to_response(zone)
 
 
-@router.put("/{zone_id}", response_model=ZonePolygonResponse)
-def update_zone(zone_id: str, payload: ZonePolygonUpdate, db: Session = Depends(get_db)) -> ZonePolygonResponse:
+@router.put("/{zone_id}")
+def update_zone(zone_id: str, body: dict = Body(...), db: Session = Depends(get_db)):
+    editor_zone = get_editor_zone_or_none(db, zone_id)
+    if editor_zone is not None:
+        try:
+            payload = CameraEditorZoneUpdate.model_validate(body)
+            updated = update_editor_zone(db, editor_zone, payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        return editor_zone_to_response_dict(updated)
+
     zone = _get_zone_or_404(zone_id, db)
+    payload = ZonePolygonUpdate.model_validate(body)
     values = payload.model_dump(exclude_unset=True)
 
     try:
@@ -163,6 +180,11 @@ def update_zone(zone_id: str, payload: ZonePolygonUpdate, db: Session = Depends(
 
 @router.delete("/{zone_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_zone(zone_id: str, db: Session = Depends(get_db)) -> None:
+    editor_zone = get_editor_zone_or_none(db, zone_id)
+    if editor_zone is not None:
+        delete_editor_zone(db, editor_zone)
+        return
+
     zone = _get_zone_or_404(zone_id, db)
     db.delete(zone)
     db.commit()

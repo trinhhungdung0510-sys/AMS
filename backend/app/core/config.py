@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     )
     employee_storage_dir: str = "storage/employees"
     storage_root: str = "storage"
+    ffprobe_path: str = "ffprobe"
+    ffmpeg_path: str = "ffmpeg"
+    camera_rtsp_test_timeout_seconds: int = 15
+    camera_snapshot_timeout_seconds: int = 20
+    uploads_root: str = "uploads"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

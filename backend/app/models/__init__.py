@@ -1,10 +1,12 @@
 from app.models.alert_category import AlertCategory
+from app.models.ai_detection import AiDetection
 from app.models.ai_model import AIModel
 from app.models.animal_intrusion_policy import AnimalIntrusionPolicy
 from app.models.ai_task import AITask
 from app.models.audit_log import AuditLog
 from app.models.biosecurity_rule import BiosecurityRule
 from app.models.camera import Camera
+from app.models.camera_editor_zone import CameraEditorZone
 from app.models.camera_health import CameraHealth
 from app.models.camera_stream import CameraStream
 from app.models.edge_device import EdgeDevice
@@ -34,6 +36,7 @@ from app.models.zone_polygon import ZonePolygon
 from app.models.zone_transition import ZoneTransition
 
 __all__ = [
+    "AiDetection",
     "AIModel",
     "AITask",
     "AlertCategory",
@@ -41,6 +44,7 @@ __all__ = [
     "AuditLog",
     "BiosecurityRule",
     "Camera",
+    "CameraEditorZone",
     "CameraHealth",
     "CameraStream",
     "EdgeDevice",

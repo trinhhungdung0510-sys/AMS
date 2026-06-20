@@ -7,12 +7,14 @@ from app.core.config import get_settings
 from app.database.base import Base
 from app.models import (  # noqa: F401
     AIModel,
+    AiDetection,
     AnimalIntrusionPolicy,
     AITask,
     AlertCategory,
     AuditLog,
     BiosecurityRule,
     Camera,
+    CameraEditorZone,
     CameraHealth,
     CameraStream,
     EdgeDevice,

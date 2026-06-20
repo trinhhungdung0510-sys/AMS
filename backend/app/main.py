@@ -6,10 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.animal_intrusion import router as animal_intrusion_router
+from app.api.ai_detections import router as ai_detections_router
 from app.api.ai_models import router as ai_models_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.camera_health import router as camera_health_router
+from app.api.camera_editor_zones import router as camera_editor_zones_router
+from app.api.camera_snapshots import router as camera_snapshots_router
 from app.api.cameras import router as cameras_router
 from app.api.compliance import router as compliance_router
 from app.api.dashboard import router as dashboard_router
@@ -60,11 +63,14 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(animal_intrusion_router, prefix=settings.api_prefix)
+app.include_router(ai_detections_router, prefix=settings.api_prefix)
 app.include_router(ai_models_router, prefix=settings.api_prefix)
 app.include_router(audit_router, prefix=settings.api_prefix)
 app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(camera_health_router, prefix=settings.api_prefix)
 app.include_router(cameras_router, prefix=settings.api_prefix)
+app.include_router(camera_snapshots_router, prefix=settings.api_prefix)
+app.include_router(camera_editor_zones_router, prefix=settings.api_prefix)
 app.include_router(compliance_router, prefix=settings.api_prefix)
 app.include_router(dashboard_router, prefix=settings.api_prefix)
 app.include_router(devices_router, prefix=settings.api_prefix)
@@ -95,6 +101,10 @@ storage_root = Path(settings.storage_root)
 storage_root.mkdir(parents=True, exist_ok=True)
 Path(settings.employee_storage_dir).mkdir(parents=True, exist_ok=True)
 app.mount("/storage", StaticFiles(directory=str(storage_root)), name="storage")
+
+uploads_root = Path(settings.uploads_root)
+uploads_root.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_root)), name="uploads")
 
 
 @app.on_event("startup")

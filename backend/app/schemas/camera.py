@@ -66,6 +66,27 @@ class CameraUpdate(BaseModel):
     last_seen: Optional[str] = Field(default=None, max_length=32)
 
 
+class CameraConnectionTestRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    rtsp_url: str = Field(alias="rtspUrl", min_length=8, max_length=500)
+
+    @field_validator("rtsp_url")
+    @classmethod
+    def validate_rtsp_url(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned.lower().startswith("rtsp://"):
+            raise ValueError("rtspUrl phải bắt đầu bằng rtsp://")
+        return cleaned
+
+
+class CameraConnectionTestResponse(BaseModel):
+    success: bool
+    fps: Optional[int] = None
+    resolution: Optional[str] = None
+    error: Optional[str] = None
+
+
 class CameraResponse(BaseModel):
     id: str
     name: str

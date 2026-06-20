@@ -123,3 +123,32 @@ export function buildCameraPayload(values, { isEdit = false } = {}) {
 
   return payload
 }
+
+export function resolveRtspUrl(values) {
+  if (values.rtsp_url?.trim()) return values.rtsp_url.trim()
+  if (!values.ip?.trim() || !values.username?.trim()) return ''
+
+  const password = encodeURIComponent(values.password?.trim() || '')
+  const username = encodeURIComponent(values.username.trim())
+  const port = Number(values.port) || 554
+  return `rtsp://${username}:${password}@${values.ip.trim()}:${port}/Streaming/Channels/101`
+}
+
+export async function testCameraConnection(rtspUrl) {
+  const response = await apiFetch('/cameras/test', {
+    method: 'POST',
+    body: JSON.stringify({ rtspUrl }),
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const detail = typeof data.detail === 'string'
+      ? data.detail
+      : Array.isArray(data.detail)
+        ? data.detail.map((item) => item.msg).join(', ')
+        : 'Không thể kiểm tra kết nối camera'
+    throw new Error(detail)
+  }
+
+  return data
+}

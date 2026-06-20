@@ -5,7 +5,14 @@ from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models import Camera
-from app.schemas.camera import CameraCreate, CameraResponse, CameraUpdate
+from app.schemas.camera import (
+    CameraConnectionTestRequest,
+    CameraConnectionTestResponse,
+    CameraCreate,
+    CameraResponse,
+    CameraUpdate,
+)
+from app.services.camera_connection_test import probe_rtsp_stream
 from app.services.camera_registry import camera_to_response_dict, create_camera, update_camera
 from app.services.snapshot_generator import render_camera_frame_bytes
 
@@ -29,6 +36,17 @@ def _to_response(camera: Camera) -> CameraResponse:
 def list_cameras(db: Session = Depends(get_db)) -> list[CameraResponse]:
     cameras = list(db.scalars(select(Camera).order_by(Camera.id)))
     return [_to_response(camera) for camera in cameras]
+
+
+@router.post("/test", response_model=CameraConnectionTestResponse)
+def test_camera_connection(payload: CameraConnectionTestRequest) -> CameraConnectionTestResponse:
+    result = probe_rtsp_stream(payload.rtsp_url)
+    return CameraConnectionTestResponse(
+        success=result.success,
+        fps=result.fps,
+        resolution=result.resolution,
+        error=result.error,
+    )
 
 
 @router.get("/{camera_id}", response_model=CameraResponse)

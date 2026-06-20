@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import CameraFeed from '../components/CameraFeed'
@@ -13,6 +13,14 @@ import {
 } from '../data/mockData'
 import { mapApiEventToViolation, TODAY } from '../data/atshViolations'
 import { getCameraById, getCameraIp } from '../services/cameraService'
+import {
+  captureCameraSnapshot,
+  getLatestCameraSnapshot,
+  resolveSnapshotAssetUrl,
+} from '../services/cameraSnapshotService'
+import CameraSnapshotCard from '../components/camera/CameraSnapshotCard'
+import DetectionOverlay from '../components/camera/DetectionOverlay'
+import ZoneEditor from '../components/camera/ZoneEditor'
 import { getEvents } from '../services/eventService'
 import { formatDateTime } from '../utils/formatters'
 
@@ -70,6 +78,11 @@ function CameraDetailPage() {
   const [alerts, setAlerts] = useState([])
   const [images, setImages] = useState([])
   const [loading, setLoading] = useState(true)
+  const [snapshotUrl, setSnapshotUrl] = useState('')
+  const [snapshotCapturedAt, setSnapshotCapturedAt] = useState('')
+  const [snapshotLoading, setSnapshotLoading] = useState(false)
+  const [snapshotCapturing, setSnapshotCapturing] = useState(false)
+  const [snapshotError, setSnapshotError] = useState('')
   const [timeFilter, setTimeFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
 
@@ -128,6 +141,57 @@ function CameraDetailPage() {
     }
   }, [cameraId])
 
+  const loadLatestSnapshot = useCallback(async (targetCameraId) => {
+    if (!targetCameraId) return
+
+    setSnapshotLoading(true)
+    setSnapshotError('')
+
+    try {
+      const result = await getLatestCameraSnapshot(targetCameraId)
+      if (result.success && result.url) {
+        setSnapshotUrl(result.url)
+        setSnapshotCapturedAt(result.captured_at || '')
+      } else {
+        setSnapshotUrl('')
+        setSnapshotCapturedAt('')
+        if (result.error) setSnapshotError(result.error)
+      }
+    } catch (error) {
+      setSnapshotUrl('')
+      setSnapshotCapturedAt('')
+      setSnapshotError(error.message)
+    } finally {
+      setSnapshotLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!cameraId || !camera) return
+    loadLatestSnapshot(cameraId)
+  }, [camera, cameraId, loadLatestSnapshot])
+
+  const handleCaptureSnapshot = async () => {
+    if (!cameraId) return
+
+    setSnapshotCapturing(true)
+    setSnapshotError('')
+
+    try {
+      const result = await captureCameraSnapshot(cameraId)
+      if (result.success && result.url) {
+        setSnapshotUrl(result.url)
+        setSnapshotCapturedAt(result.captured_at || new Date().toISOString())
+      } else {
+        setSnapshotError(result.error || 'Không chụp được snapshot')
+      }
+    } catch (error) {
+      setSnapshotError(error.message)
+    } finally {
+      setSnapshotCapturing(false)
+    }
+  }
+
   const filteredAlerts = useMemo(() => {
     let result = alerts
     if (timeFilter === 'today') result = result.filter((alert) => alert.date === TODAY)
@@ -169,6 +233,9 @@ function CameraDetailPage() {
   }
 
   const cameraIp = getCameraIp(camera)
+  const snapshotImageUrl = snapshotUrl
+    ? `${resolveSnapshotAssetUrl(snapshotUrl)}?t=${encodeURIComponent(snapshotCapturedAt || 'latest')}`
+    : ''
 
   return (
     <div className="camera-detail">
@@ -197,6 +264,20 @@ function CameraDetailPage() {
             <div><span>Uptime</span><strong>{camera.uptime}%</strong></div>
             <div><span>FPS</span><strong>{camera.fps}</strong></div>
           </div>
+
+          <CameraSnapshotCard
+            snapshotUrl={snapshotUrl}
+            capturedAt={snapshotCapturedAt}
+            loading={snapshotLoading}
+            capturing={snapshotCapturing}
+            error={snapshotError}
+            onCapture={handleCaptureSnapshot}
+            onRefresh={() => loadLatestSnapshot(cameraId)}
+          />
+
+          <DetectionOverlay cameraId={cameraId} snapshotUrl={snapshotImageUrl} />
+
+          <ZoneEditor cameraId={cameraId} snapshotUrl={snapshotImageUrl} />
         </section>
 
         <aside className="camera-detail__sidebar">

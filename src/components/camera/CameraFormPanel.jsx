@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { resolveRtspUrl, testCameraConnection } from '../../services/cameraService'
 
 const STATUS_OPTIONS = [
   { value: 'online', label: 'Online' },
@@ -17,15 +18,22 @@ function CameraFormPanel({
   const [values, setValues] = useState(initialValues)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState(null)
+  const [testError, setTestError] = useState('')
 
   useEffect(() => {
     setValues(initialValues)
     setErrors({})
+    setTestResult(null)
+    setTestError('')
   }, [initialValues])
 
   const updateField = (field, value) => {
     setValues((current) => ({ ...current, [field]: value }))
     setErrors((current) => ({ ...current, [field]: undefined }))
+    setTestResult(null)
+    setTestError('')
   }
 
   const handleSubmit = async (event) => {
@@ -37,6 +45,48 @@ function CameraFormPanel({
       setSubmitting(false)
     }
   }
+
+  const handleTestConnection = async () => {
+    setTesting(true)
+    setTestResult(null)
+    setTestError('')
+
+    const rtspUrl = resolveRtspUrl(values)
+    if (!rtspUrl) {
+      setTestError('Nhập RTSP URL hoặc IP + username + password để kiểm tra')
+      setTesting(false)
+      return
+    }
+
+    if (!values.rtsp_url?.trim() && !values.password?.trim()) {
+      setTestError('Cần mật khẩu để dựng RTSP URL khi chưa nhập URL trực tiếp')
+      setTesting(false)
+      return
+    }
+
+    try {
+      const result = await testCameraConnection(rtspUrl)
+      setTestResult(result)
+      if (result.success) {
+        setValues((current) => ({
+          ...current,
+          status: 'online',
+          fps: result.fps ?? current.fps,
+          resolution: result.resolution || current.resolution,
+        }))
+      } else {
+        setValues((current) => ({ ...current, status: 'offline' }))
+      }
+    } catch (error) {
+      setTestError(error.message)
+      setValues((current) => ({ ...current, status: 'offline' }))
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const connectionOnline = testResult?.success === true
+  const connectionOffline = testResult?.success === false || Boolean(testError)
 
   return (
     <div className="camera-form-overlay">
@@ -133,6 +183,41 @@ function CameraFormPanel({
                 placeholder="rtsp://user:pass@ip:554/Streaming/Channels/101"
               />
             </label>
+
+            <div className="camera-form__full camera-connection-test">
+              <div className="camera-connection-test__actions">
+                <button
+                  type="button"
+                  className="btn btn--outline"
+                  onClick={handleTestConnection}
+                  disabled={testing}
+                >
+                  {testing ? 'Đang kiểm tra...' : 'Test Connection'}
+                </button>
+              </div>
+
+              {(testResult || testError) ? (
+                <div className={`camera-connection-test__result${connectionOnline ? ' camera-connection-test__result--online' : ''}${connectionOffline ? ' camera-connection-test__result--offline' : ''}`}>
+                  <div className="camera-connection-test__row">
+                    <span>Trạng thái</span>
+                    <strong>
+                      {testing ? 'Đang kiểm tra...' : connectionOnline ? 'Online' : 'Offline'}
+                    </strong>
+                  </div>
+                  <div className="camera-connection-test__row">
+                    <span>Resolution</span>
+                    <strong>{testResult?.resolution || '—'}</strong>
+                  </div>
+                  <div className="camera-connection-test__row">
+                    <span>FPS</span>
+                    <strong>{testResult?.fps ?? '—'}</strong>
+                  </div>
+                  {(testResult?.error || testError) ? (
+                    <p className="camera-connection-test__error">{testResult?.error || testError}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
 
             <label className="settings-form__label">
               <span>Khu vực</span>
