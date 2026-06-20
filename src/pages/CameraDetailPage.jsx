@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
+import { useRealtimeEvents } from '../hooks/useRealtimeEvents'
 import CameraFeed from '../components/CameraFeed'
 import ViolationCard from '../components/ViolationCard'
 import {
@@ -196,6 +197,14 @@ function CameraDetailPage() {
       loadEngineTimeline()
     }
   }, [activeTab, loadEngineTimeline])
+
+  useRealtimeEvents({
+    filterCameraId: cameraId,
+    eventTypes: ['event.created', 'event.updated'],
+    onMessage: () => {
+      loadEngineTimeline()
+    },
+  })
 
   const handleCaptureSnapshot = async () => {
     if (!cameraId) return

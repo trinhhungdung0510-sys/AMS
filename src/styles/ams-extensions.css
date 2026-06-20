@@ -2827,3 +2827,77 @@
   font-weight: 600;
   padding: 0 0.25rem;
 }
+
+.page-content__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.realtime-feed {
+  position: sticky;
+  top: 16px;
+}
+
+.realtime-feed__status {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.realtime-feed__status--online {
+  color: #166534;
+  font-weight: 700;
+}
+
+.realtime-feed__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.realtime-feed__item {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.realtime-feed__item strong {
+  font-size: 13px;
+}
+
+.realtime-feed__item span,
+.realtime-feed__item small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.realtime-feed__empty {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.realtime-dashboard {
+  margin-bottom: 16px;
+  display: grid;
+  gap: 16px;
+}
+
+.realtime-dashboard__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 1200px) {
+  .page-content__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .realtime-feed {
+    position: static;
+  }
+}

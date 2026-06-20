@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react'
+import { subscribeWsEvents } from '../services/wsClient'
 
 const NotificationContext = createContext(null)
 
@@ -13,6 +14,20 @@ export function NotificationProvider({ children }) {
   const notify = useCallback((payload) => {
     CHANNELS.forEach((channel) => logNotification(channel, payload))
   }, [])
+
+  useEffect(() => {
+    return subscribeWsEvents({
+      onMessage: (payload) => {
+        if (payload.type !== 'notification.created') return
+        const notification = payload.payload?.notification
+        if (!notification) return
+        notify({
+          type: 'notification_created',
+          ...notification,
+        })
+      },
+    })
+  }, [notify])
 
   const value = useMemo(() => ({ notify }), [notify])
 

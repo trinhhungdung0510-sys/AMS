@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { mapObservationToZones } from '../../core/zoneMapper'
 import { runObservationPipeline } from '../../core/observationPipeline'
 import { generateMockObservation, listMockScenarios } from '../../mock/mockDetector'
+import { useRealtimeEvents } from '../../hooks/useRealtimeEvents'
 import { listObservations } from '../../services/observationService'
 import { getRules } from '../../services/ruleService'
 import { getZones } from '../../services/zoneService'
@@ -77,6 +78,21 @@ function ObservationViewer({ cameraId, onEventsCreated }) {
     loadData()
   }, [loadData])
 
+  useRealtimeEvents({
+    filterCameraId: cameraId,
+    eventTypes: ['observation.created', 'event.created'],
+    onMessage: (payload) => {
+      if (payload.type === 'observation.created') {
+        const observation = payload.payload?.observation
+        if (!observation) return
+        setObservations((current) => [observation, ...current.filter((item) => item.id !== observation.id)])
+      }
+      if (payload.type === 'event.created') {
+        onEventsCreated?.([payload.payload?.event].filter(Boolean))
+      }
+    },
+  })
+
   const handleRunPipeline = async () => {
     setRunning(true)
     setError('')
@@ -86,15 +102,10 @@ function ObservationViewer({ cameraId, onEventsCreated }) {
       const payload = generateMockObservation(cameraId, selectedScenario)
       const result = await runObservationPipeline({
         observationPayload: payload,
-        zones,
-        rules,
       })
       if (!mountedRef.current) return
-      setObservations((current) => [result.observation, ...current])
-      setSuccess(
-        `Pipeline OK — ${result.events.length} event, ${result.zoneMappings.length} object mapped`,
-      )
-      if (result.events.length) onEventsCreated?.(result.events)
+      setObservations((current) => [result.observation, ...current.filter((item) => item.id !== result.observation.id)])
+      setSuccess('Observation đã gửi — pipeline realtime qua EventBus')
     } catch (pipelineError) {
       if (!mountedRef.current) return
       setError(pipelineError.message)

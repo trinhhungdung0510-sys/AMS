@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.models import Camera, Observation
 from app.schemas.observation import ObservationCreate
+from app.core.event_bus import get_event_bus
+from app.core.event_bus.event_types import OBSERVATION_CREATED
 
 
 def utc_now_iso() -> str:
@@ -62,6 +64,16 @@ def create_observation(db: Session, payload: ObservationCreate) -> Observation:
     db.add(observation)
     db.commit()
     db.refresh(observation)
+
+    get_event_bus().publish(
+        OBSERVATION_CREATED,
+        {
+            "topic": OBSERVATION_CREATED,
+            "timestamp": now,
+            "data": {"observation": observation_to_response_dict(observation)},
+        },
+    )
+
     return observation
 
 

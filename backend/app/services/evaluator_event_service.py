@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Camera, CameraZone, Event, ZoneRule
 from app.schemas.observation import EventEngineCreate
+from app.core.event_bus import get_event_bus
+from app.core.event_bus.event_types import EVENT_CREATED
+from app.services.event_engine_service import event_to_engine_dict
 
 EVENT_STATUS_OPEN = "OPEN"
 
@@ -67,4 +70,14 @@ def create_event_from_evaluation(db: Session, payload: EventEngineCreate) -> Eve
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    get_event_bus().publish(
+        EVENT_CREATED,
+        {
+            "topic": EVENT_CREATED,
+            "timestamp": now,
+            "data": {"event": event_to_engine_dict(db, event)},
+        },
+    )
+
     return event

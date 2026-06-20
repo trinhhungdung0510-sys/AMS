@@ -65,3 +65,32 @@ def resolve_normalized_points(
         return [{"x": float(point["x"]), "y": float(point["y"])} for point in points]
 
     return scale_polygon_to_normalized(points, float(ref_w), float(ref_h))
+
+
+def bbox_center(bbox: dict) -> dict:
+    return {
+        "x": float(bbox["x"]) + float(bbox["width"]) / 2.0,
+        "y": float(bbox["y"]) + float(bbox["height"]) / 2.0,
+    }
+
+
+def point_in_polygon(point: dict, polygon: list[dict]) -> bool:
+    if not point or not polygon or len(polygon) < 3:
+        return False
+
+    inside = False
+    j = len(polygon) - 1
+    for i in range(len(polygon)):
+        yi = float(polygon[i]["y"])
+        yj = float(polygon[j]["y"])
+        xi = float(polygon[i]["x"])
+        xj = float(polygon[j]["x"])
+        py = float(point["y"])
+        px = float(point["x"])
+
+        intersects = (yi > py) != (yj > py) and px < ((xj - xi) * (py - yi) / (yj - yi + 1e-9)) + xi
+        if intersects:
+            inside = not inside
+        j = i
+
+    return inside

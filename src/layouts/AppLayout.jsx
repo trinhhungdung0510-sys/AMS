@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
+import RealtimeEventFeed from '../components/realtime/RealtimeEventFeed'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/AuthContext'
 import { getCameraById, pageMeta } from '../data/mockData'
@@ -79,7 +80,12 @@ function AppLayout() {
         </div>
 
         <main className="page-content">
-          <Outlet />
+          <div className="page-content__grid">
+            <div className="page-content__main">
+              <Outlet />
+            </div>
+            <RealtimeEventFeed />
+          </div>
         </main>
 
         <footer className="app-footer">

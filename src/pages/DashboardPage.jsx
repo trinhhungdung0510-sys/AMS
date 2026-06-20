@@ -22,6 +22,7 @@ import {
 } from '../data/mockData'
 
 import { LOGO_SRC } from '../components/BrandLogo'
+import RealtimeDashboardWidgets from '../components/realtime/RealtimeDashboardWidgets'
 import { API_BASE_URL } from '../config/api'
 
 const COLORS = ['#0B6B1B', '#F36A10', '#dc2626', '#facc15', '#64748b']
@@ -127,6 +128,7 @@ function DashboardPage() {
   return (
     <div className="dashboard-page">
       <img src={LOGO_SRC} alt="TIN NGHIA AMS" className="dashboard-page__brand-mark" />
+      <RealtimeDashboardWidgets />
       <section className="stat-grid">
         {stats.map((stat) => (
           <article key={stat.label} className={`metric-card metric-card--${stat.tone}`}>

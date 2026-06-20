@@ -43,13 +43,19 @@ from app.api.visitors import router as visitors_router
 from app.api.workflows import router as workflows_router
 from app.api.zones import router as zones_router
 from app.core.config import get_settings
+from app.services.event_stream_service import event_stream_service
+from app.services.pipeline_subscribers import register_pipeline_subscribers
 from app.services.rtsp_simulator import rtsp_simulator_worker
+from app.services.camera_health_service import camera_health_service
+from app.database.session import SessionLocal
+from app.ws.event_gateway import router as ws_events_router
 
 settings = get_settings()
 
 app = FastAPI(title=settings.app_name, version="4.0.0")
 app.state.rtsp_stop_event = asyncio.Event()
 app.state.rtsp_task = None
+app.state.health_task = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -98,6 +104,7 @@ app.include_router(employees_router, prefix=settings.api_prefix)
 app.include_router(visitors_router, prefix=settings.api_prefix)
 app.include_router(tracks_router, prefix=settings.api_prefix)
 app.include_router(realtime_router)
+app.include_router(ws_events_router)
 app.include_router(biosecurity_rules_router, prefix=settings.api_prefix)
 app.include_router(rules_router, prefix=settings.api_prefix)
 
@@ -113,8 +120,25 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_root)), name="uploads")
 
 @app.on_event("startup")
 async def start_rtsp_simulator() -> None:
+    register_pipeline_subscribers()
+    event_stream_service.set_app_loop(asyncio.get_running_loop())
+    event_stream_service.register()
     app.state.rtsp_stop_event = asyncio.Event()
     app.state.rtsp_task = asyncio.create_task(rtsp_simulator_worker(app.state.rtsp_stop_event))
+    app.state.health_task = asyncio.create_task(_camera_health_monitor_worker(app.state.rtsp_stop_event))
+
+
+async def _camera_health_monitor_worker(stop_event: asyncio.Event) -> None:
+    while not stop_event.is_set():
+        db = SessionLocal()
+        try:
+            camera_health_service.evaluate_statuses(db)
+        finally:
+            db.close()
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=30.0)
+        except asyncio.TimeoutError:
+            continue
 
 
 @app.on_event("shutdown")
@@ -122,3 +146,5 @@ async def stop_rtsp_simulator() -> None:
     if app.state.rtsp_task:
         app.state.rtsp_stop_event.set()
         app.state.rtsp_task.cancel()
+    if getattr(app.state, "health_task", None):
+        app.state.health_task.cancel()
