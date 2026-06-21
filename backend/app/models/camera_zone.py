@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy import JSON, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.roles import DEFAULT_FARM_ID
 from app.database.base import Base
 
 POINTS_FORMAT_PIXEL = "pixel"
@@ -17,6 +18,7 @@ class CameraZone(Base):
     __tablename__ = "camera_zones"
 
     id: Mapped[str] = mapped_column(String(24), primary_key=True, index=True)
+    farm_id: Mapped[str] = mapped_column(String(20), default=DEFAULT_FARM_ID, index=True, nullable=False)
     camera_id: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
     parent_zone_id: Mapped[Optional[str]] = mapped_column(String(24), index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -31,5 +33,6 @@ class CameraZone(Base):
         nullable=False,
         default=POINTS_FORMAT_PIXEL,
     )
+    required_uniform_id: Mapped[Optional[str]] = mapped_column(String(24), index=True, nullable=True)
     created_at: Mapped[str] = mapped_column(String(32), nullable=False)
     updated_at: Mapped[str] = mapped_column(String(32), nullable=False)

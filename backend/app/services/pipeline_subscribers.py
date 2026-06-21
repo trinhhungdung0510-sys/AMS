@@ -10,8 +10,10 @@ from app.core.event_bus import event_types as topics
 from app.core.runtime.zone_presence_tracker import (
     PRESENCE_ENTER,
     PRESENCE_EXIT,
+    PRESENCE_UNKNOWN,
     get_zone_presence_tracker,
 )
+from app.compliance.compliance_integration import run_compliance_after_person_enter
 from app.core.runtime.track_store import get_track_store
 from app.core.runtime.zone_mapper import map_observation_to_zones, object_in_zone
 from app.database.session import SessionLocal
@@ -108,10 +110,32 @@ def handle_track_updated(message: dict[str, Any]) -> None:
 
     db = SessionLocal()
     try:
-    hits = _evaluate_track_rules(db, track, observation, zone_mapping, is_new=payload.get("isNew"))
+        hits = _evaluate_track_rules(db, track, observation, zone_mapping, is_new=payload.get("isNew"))
+        obj = next(
+            (
+                item
+                for item in observation.get("objects") or []
+                if (item.get("trackId") or item.get("track_id")) == track["trackId"]
+            ),
+            None,
+        )
         for hit in hits:
             _publish(topics.RULE_EVALUATED, hit)
             create_event_from_evaluation(db, EventEngineCreate(**hit["eventPayload"]))
+            if hit.get("eventType") == "PERSON_ENTER" and obj is not None:
+                try:
+                    run_compliance_after_person_enter(
+                        db,
+                        hit=hit,
+                        track=track,
+                        observation=observation,
+                        obj=obj,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Compliance evaluation failed after PERSON_ENTER track=%s",
+                        track.get("trackId"),
+                    )
     except Exception:
         logger.exception("Evaluator subscriber failed for track=%s", track.get("trackId"))
     finally:

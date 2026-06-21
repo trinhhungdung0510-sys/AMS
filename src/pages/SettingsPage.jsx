@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Mail, Send, ShieldCheck, SlidersHorizontal, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import CameraFormPanel from '../components/camera/CameraFormPanel'
-import { alertSettings, severityLabels, users } from '../data/mockData'
+import { alertSettings, severityLabels } from '../data/mockData'
 import { getFarms } from '../services/farmService'
+import { getSystemSettings, updateSystemSettings, createSystemBackup } from '../services/systemSettingsService'
+import { fetchDemoStatus, startDemoMode, stopDemoMode } from '../services/demoService'
+import { listUsers } from '../services/userService'
 import {
   EMPTY_CAMERA_FORM,
   buildCameraPayload,
@@ -23,6 +26,9 @@ function SettingsPage() {
   const [formMode, setFormMode] = useState(null)
   const [editingCamera, setEditingCamera] = useState(null)
   const [statusMessage, setStatusMessage] = useState('')
+  const [systemSettings, setSystemSettings] = useState(null)
+  const [demoStatus, setDemoStatus] = useState(null)
+  const [managedUsers, setManagedUsers] = useState([])
 
   const formInitialValues = useMemo(() => {
     if (formMode === 'edit') return cameraToFormValues(editingCamera)
@@ -36,11 +42,17 @@ function SettingsPage() {
   async function loadData() {
     setLoading(true)
     try {
-      const [cameraData, farmData] = await Promise.all([
+      const [cameraData, farmData, settingsData, usersData, demoData] = await Promise.all([
         getCameras(),
         getFarms().catch(() => []),
+        getSystemSettings().catch(() => null),
+        listUsers().catch(() => []),
+        fetchDemoStatus().catch(() => null),
       ])
       setCameras(cameraData)
+      setSystemSettings(settingsData)
+      setDemoStatus(demoData)
+      setManagedUsers(usersData)
       if (farmData.length) {
         setFarms(farmData.map((farm) => ({ id: farm.id, name: farm.name })))
       }
@@ -126,6 +138,55 @@ function SettingsPage() {
     }
   }
 
+  const handleSaveSystemSettings = async () => {
+    if (!systemSettings) return
+    try {
+      const saved = await updateSystemSettings(systemSettings)
+      setSystemSettings(saved)
+      setStatusMessage('Đã lưu cấu hình hệ thống')
+      const status = await fetchDemoStatus().catch(() => null)
+      setDemoStatus(status)
+    } catch (error) {
+      setStatusMessage(error.message)
+    }
+  }
+
+  const handleStartDemo = async () => {
+    try {
+      const result = await startDemoMode()
+      setDemoStatus(await fetchDemoStatus())
+      setStatusMessage(`Demo stream đang chạy · Compliance ${result.complianceScore}%`)
+    } catch (error) {
+      setStatusMessage(error.message)
+    }
+  }
+
+  const handleStopDemo = async () => {
+    try {
+      await stopDemoMode()
+      setDemoStatus(await fetchDemoStatus())
+      setStatusMessage('Đã dừng demo stream')
+    } catch (error) {
+      setStatusMessage(error.message)
+    }
+  }
+
+  const handleCreateBackup = async () => {
+    try {
+      const backup = await createSystemBackup()
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `ams-backup-${new Date().toISOString().slice(0, 10)}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+      setStatusMessage('Đã xuất backup JSON')
+    } catch (error) {
+      setStatusMessage(error.message)
+    }
+  }
+
   return (
     <div className="settings-page">
       <div className="settings-grid">
@@ -137,17 +198,20 @@ function SettingsPage() {
             </div>
           </div>
           <div className="settings-list">
-            {users.map((user) => (
+            {(managedUsers.length ? managedUsers : []).map((user) => (
               <div key={user.id} className="settings-list__item">
                 <div>
-                  <strong>{user.name}</strong>
-                  <span>{user.email}</span>
+                  <strong>{user.full_name}</strong>
+                  <span>{user.email} · {user.role}</span>
                 </div>
-                <span className={`status-tag status-tag--${user.status === 'active' ? 'resolved' : 'new'}`}>
-                  {user.status === 'active' ? 'Hoạt động' : 'Tạm khóa'}
+                <span className={`status-tag status-tag--${user.is_active ? 'resolved' : 'new'}`}>
+                  {user.is_active ? 'Hoạt động' : 'Tạm khóa'}
                 </span>
               </div>
             ))}
+            {!managedUsers.length ? (
+              <p className="panel__meta">Chưa tải được danh sách user từ API.</p>
+            ) : null}
           </div>
         </section>
 
@@ -159,10 +223,14 @@ function SettingsPage() {
             </div>
           </div>
           <div className="role-grid">
-            {['Quản trị viên', 'Giám sát ca', 'Kỹ thuật camera', 'Thú y', 'Chỉ xem'].map((role) => (
+            {[
+              ['SUPER_ADMIN', 'Quản lý toàn bộ hệ thống'],
+              ['FARM_ADMIN', 'Quản lý farm được gán'],
+              ['VIEWER', 'Chỉ xem dữ liệu'],
+            ].map(([role, desc]) => (
               <div key={role} className="role-card">
                 <strong>{role}</strong>
-                <span>{role === 'Chỉ xem' ? 'Xem dữ liệu' : 'Xem, xử lý và cấu hình'}</span>
+                <span>{desc}</span>
               </div>
             ))}
           </div>
@@ -170,6 +238,108 @@ function SettingsPage() {
       </div>
 
       <div className="settings-sections">
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <h2 className="panel__title"><SlidersHorizontal size={18} /> Cấu hình hệ thống</h2>
+              <p className="panel__desc">Compliance threshold, workflow timeout, demo mode, retention</p>
+            </div>
+          </div>
+          {systemSettings ? (
+            <div className="settings-form">
+              <label className="settings-form__label">
+                <span>Ngưỡng tuân thủ (0-1)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  className="settings-form__input"
+                  value={systemSettings.compliance_threshold}
+                  onChange={(event) =>
+                    setSystemSettings((prev) => ({
+                      ...prev,
+                      compliance_threshold: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <label className="settings-form__label">
+                <span>Workflow timeout (giây)</span>
+                <input
+                  type="number"
+                  min="30"
+                  className="settings-form__input"
+                  value={systemSettings.workflow_timeout}
+                  onChange={(event) =>
+                    setSystemSettings((prev) => ({
+                      ...prev,
+                      workflow_timeout: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <label className="settings-form__label">
+                <span>Retention (ngày)</span>
+                <input
+                  type="number"
+                  min="1"
+                  className="settings-form__input"
+                  value={systemSettings.retention_days}
+                  onChange={(event) =>
+                    setSystemSettings((prev) => ({
+                      ...prev,
+                      retention_days: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <label className="settings-form__label settings-form__label--inline">
+                <span>Demo mode</span>
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(systemSettings.demo_mode)}
+                    onChange={(event) =>
+                      setSystemSettings((prev) => ({
+                        ...prev,
+                        demo_mode: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span className="toggle__slider" />
+                </label>
+              </label>
+              {demoStatus ? (
+                <div className="settings-form__demo-panel">
+                  <p className="panel__meta">
+                    Stream: {demoStatus.running ? 'Đang chạy' : 'Dừng'} · Events: {demoStatus.eventsGenerated ?? 0} ·
+                    Compliance: {demoStatus.complianceScore ?? '—'}%
+                  </p>
+                  <div className="settings-form__actions">
+                    <button type="button" className="btn btn--outline" onClick={handleStopDemo} disabled={!demoStatus.running}>
+                      Dừng Demo
+                    </button>
+                    <button type="button" className="btn btn--primary" onClick={handleStartDemo} disabled={!systemSettings.demo_mode}>
+                      Bắt đầu Demo
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="settings-form__actions">
+                <button type="button" className="btn btn--outline" onClick={handleCreateBackup}>
+                  Xuất backup JSON
+                </button>
+                <button type="button" className="btn btn--primary" onClick={handleSaveSystemSettings}>
+                  Lưu cấu hình
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="panel__meta">Không tải được cấu hình hệ thống.</p>
+          )}
+        </section>
+
         <section className="panel">
           <div className="panel__header">
             <div>

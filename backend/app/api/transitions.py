@@ -16,6 +16,7 @@ from app.schemas.transition import (
 )
 from app.services.animal_intrusion_engine import evaluate_animal_intrusion
 from app.services.biosecurity_engine import evaluate_transition
+from app.biosecurity_workflow.integration import evaluate_biosecurity_process
 from app.services.workflow_engine import evaluate_workflow
 from app.services.zone_crossing_engine import process_zone_crossing
 
@@ -78,6 +79,7 @@ async def register_zone_crossing(
     if not violation_payload:
         intrusion_payload = evaluate_animal_intrusion(db, transition)
     workflow_payload = evaluate_workflow(db, transition)
+    evaluate_biosecurity_process(db, transition)
     db.commit()
     db.refresh(transition)
 
@@ -147,6 +149,7 @@ async def create_transition(payload: ZoneTransitionCreate, db: Session = Depends
     if not violation_payload:
         intrusion_payload = evaluate_animal_intrusion(db, transition)
     workflow_payload = evaluate_workflow(db, transition)
+    evaluate_biosecurity_process(db, transition)
     db.commit()
     db.refresh(transition)
     if violation_payload:

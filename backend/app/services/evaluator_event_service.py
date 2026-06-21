@@ -10,6 +10,7 @@ from app.schemas.observation import EventEngineCreate
 from app.core.event_bus import get_event_bus
 from app.core.event_bus.event_types import EVENT_CREATED
 from app.services.event_engine_service import event_to_engine_dict
+from app.events.event_catalog import enrich_event_fields, resolve_event_severity
 
 EVENT_STATUS_OPEN = "OPEN"
 
@@ -81,3 +82,96 @@ def create_event_from_evaluation(db: Session, payload: EventEngineCreate) -> Eve
     )
 
     return event
+
+
+COMPLIANCE_EVENT_CATEGORY = "compliance_violation"
+
+
+def create_compliance_violation_event(
+    db: Session,
+    *,
+    event_type: str,
+    rule_id: str,
+    rule_name: str,
+    camera_id: str,
+    zone_id: str,
+    track_id: int | None,
+    score: float,
+    snapshot_path: str | None,
+    timestamp: str | None = None,
+    evidence: dict | None = None,
+    publish: bool = True,
+) -> Event:
+    camera = db.get(Camera, camera_id)
+    zone = db.get(CameraZone, zone_id) if zone_id else None
+    now = timestamp or utc_now_iso()
+    metadata = dict(evidence or {})
+    zone_name = getattr(zone, "name", None) if zone else zone_id
+    resolved_severity = resolve_event_severity(event_type, fallback=_compliance_score_to_severity(score))
+    enriched = enrich_event_fields(
+        event_type=event_type,
+        category=COMPLIANCE_EVENT_CATEGORY,
+        severity=resolved_severity,
+        rule_name=rule_name,
+        zone_name=zone_name or zone_id,
+    )
+    metadata.update(
+        {
+            "source": "compliance_engine",
+            "rule_id": rule_id,
+            "rule_name": rule_name,
+            "event_type": event_type,
+            "track_id": track_id,
+            "score": score,
+            "classification": enriched["classification"],
+            "title": enriched["title"],
+            "description": enriched["description"],
+            "recommendedAction": enriched["recommendedAction"],
+        }
+    )
+
+    event = Event(
+        id=new_event_id(),
+        farm_id=camera.farm_id if camera else "FARM-001",
+        camera_id=camera_id,
+        category=COMPLIANCE_EVENT_CATEGORY,
+        alert_type=enriched["title"],
+        zone=zone_name or zone_id,
+        severity=enriched["severity"],
+        status=EVENT_STATUS_OPEN,
+        handler="Chưa phân công",
+        confidence=int(round(score * 100)),
+        occurred_at=now,
+        zone_id=zone_id or None,
+        rule_id=rule_id,
+        event_type=event_type,
+        confidence_score=score,
+        snapshot_url=snapshot_path,
+        started_at=now,
+        ended_at=None,
+        event_metadata=metadata,
+        record_created_at=utc_now_iso(),
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    if publish:
+        get_event_bus().publish(
+            EVENT_CREATED,
+            {
+                "topic": EVENT_CREATED,
+                "timestamp": utc_now_iso(),
+                "data": {"event": event_to_engine_dict(db, event)},
+            },
+        )
+
+    return event
+
+
+def _compliance_score_to_severity(score: float) -> str:
+    if score >= 0.9:
+        return "HIGH"
+    if score >= 0.7:
+        return "MEDIUM"
+    return "LOW"

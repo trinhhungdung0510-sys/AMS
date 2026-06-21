@@ -13,6 +13,7 @@ from app.data.vi_catalog import (
     ZONE_LEVEL_LABELS,
 )
 from app.models import Camera, Event, Farm, FarmZone
+from app.events.event_catalog import enrich_event_fields
 
 
 def resolve_zone_name(db: Session, zone_code: str) -> str:
@@ -57,17 +58,45 @@ def resolve_camera_name(db: Session, camera_id: str) -> str:
 
 
 def event_to_vi_dict(db: Session, event: Event) -> dict:
+    metadata = event.event_metadata or {}
+    score = event.confidence_score
+    if score is None and event.confidence is not None:
+        score = round(event.confidence / 100, 2)
+
+    zone_name = resolve_zone_name(db, event.zone)
+    rule_name = metadata.get("rule_name") or event.alert_type
+    enriched = enrich_event_fields(
+        event_type=event.event_type or event.alert_type,
+        category=event.category,
+        severity=event.severity,
+        rule_name=rule_name,
+        zone_name=zone_name,
+    )
+
     return {
         "id": event.id,
-        "ten_vi_pham": event.alert_type,
-        "muc_do": resolve_severity_label(event.severity),
-        "ten_vung": resolve_zone_name(db, event.zone),
+        "ten_vi_pham": enriched["title"],
+        "muc_do": resolve_severity_label(enriched["severity"]),
+        "ten_vung": zone_name,
         "ten_camera": resolve_camera_name(db, event.camera_id),
         "ten_trang_trai": resolve_farm_name(db, event.farm_id),
         "do_tin_cay": event.confidence,
         "thoi_gian": event.occurred_at,
         "trang_thai": resolve_status_label(event.status),
         "nguoi_xu_ly": event.handler,
+        "event_type": enriched["event_type"],
+        "classification": enriched["classification"],
+        "severity": enriched["severity"],
+        "title": enriched["title"],
+        "description": enriched["description"],
+        "recommendedAction": enriched["recommendedAction"],
+        "explanation": enriched["explanation"],
+        "camera_id": event.camera_id,
+        "zone_id": event.zone_id,
+        "rule_id": event.rule_id or metadata.get("rule_id"),
+        "rule_name": rule_name,
+        "snapshot_path": event.snapshot_url,
+        "score": score,
     }
 
 

@@ -30,6 +30,8 @@ from app.models.notification_rule import NotificationRule
 from app.models.object_track import ObjectTrack
 from app.models.person_track import PersonTrack
 from app.models.token_blacklist import TokenBlacklist
+from app.models.system_setting import SystemSetting
+from app.models.uniform_template import UniformTemplate
 from app.models.user import User
 from app.models.visitor import Visitor
 from app.models.workflow import TrackWorkflowProgress, Workflow, WorkflowStep
@@ -72,6 +74,8 @@ __all__ = [
     "Observation",
     "PersonTrack",
     "TokenBlacklist",
+    "SystemSetting",
+    "UniformTemplate",
     "User",
     "Visitor",
     "Workflow",

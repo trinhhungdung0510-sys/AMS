@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy import String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -8,6 +10,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[str] = mapped_column(String(24), primary_key=True, index=True)
+    farm_id: Mapped[Optional[str]] = mapped_column(String(20), index=True, nullable=True)
     user_id: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
     action: Mapped[str] = mapped_column(String(80), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(80), nullable=False)

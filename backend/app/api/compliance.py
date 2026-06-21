@@ -1,23 +1,32 @@
 from app.api.deps import get_current_user
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.compliance.constants import COMPLIANCE_RULE_IDS
 from app.database.session import get_db
 from app.models import Camera, Event
+from app.schemas.event import EventEngineResponse, PaginatedEventsResponse
+from app.services.event_engine_service import event_to_engine_dict
+from app.services.event_query_service import query_events_all, query_events_paginated
 from app.services.vi_localization import resolve_camera_name, resolve_severity_label, resolve_zone_name
 
 router = APIRouter(prefix="/compliance", tags=["compliance"],
     dependencies=[Depends(get_current_user)]
 )
 
+COMPLIANCE_EVENT_TYPES = set(COMPLIANCE_RULE_IDS.values())
+
 SEVERITY_PENALTY = {
+    "CRITICAL": 8,
     "critical": 8,
     "high": 5,
     "danger": 5,
+    "HIGH": 5,
     "warning": 2,
     "medium": 2,
     "low": 1,
@@ -63,7 +72,9 @@ def compliance_summary(db: Session = Depends(get_db)) -> dict:
         "diem_atsh": _score(events),
         "vi_pham_hom_nay": len(today_events),
         "tong_vi_pham": len(events),
-        "nghiem_trong": sum(1 for event in events if event.severity in {"critical", "danger"}),
+        "nghiem_trong": sum(
+            1 for event in events if event.severity in {"critical", "danger", "CRITICAL"}
+        ),
         "muc_cao": sum(1 for event in events if event.severity in {"high", "danger"}),
         "canh_bao": sum(1 for event in events if event.severity in {"warning", "medium"}),
         "camera_rui_ro_cao": [
@@ -118,3 +129,55 @@ def compliance_top_violations(db: Session = Depends(get_db)) -> list[dict]:
         {"ten_vi_pham": violation_type, **stats}
         for violation_type, stats in sorted(by_type.items(), key=lambda item: item[1]["so_vi_pham"], reverse=True)[:5]
     ]
+
+
+@router.get("/events", response_model=PaginatedEventsResponse)
+def list_compliance_events(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
+    eventType: Optional[str] = Query(default=None),
+    cameraId: Optional[str] = Query(default=None),
+    zoneId: Optional[str] = Query(default=None),
+    date: Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+) -> PaginatedEventsResponse:
+    if eventType and eventType not in COMPLIANCE_EVENT_TYPES:
+        return PaginatedEventsResponse(items=[], total=0, page=page, limit=limit)
+
+    rows, total = query_events_paginated(
+        db,
+        page=page,
+        limit=limit,
+        event_type=eventType,
+        camera_id=cameraId,
+        zone_id=zoneId,
+        event_types=COMPLIANCE_EVENT_TYPES if not eventType else None,
+        date_prefix=date,
+    )
+    items = [EventEngineResponse(**event_to_engine_dict(db, event)) for event in rows]
+    return PaginatedEventsResponse(items=items, total=total, page=page, limit=limit)
+
+
+@router.get("/events/summary")
+def compliance_events_summary(
+    date: Optional[str] = Query(default=None, description="YYYY-MM-DD, default today UTC"),
+    db: Session = Depends(get_db),
+) -> dict:
+    date_prefix = date or _today_key()
+    events = query_events_all(
+        db,
+        event_types=COMPLIANCE_EVENT_TYPES,
+        date_prefix=date_prefix,
+    )
+    by_type = Counter(event.event_type or "UNKNOWN" for event in events)
+    return {
+        "date": date_prefix,
+        "total": len(events),
+        "uniform_violation": by_type.get(COMPLIANCE_RULE_IDS["UNIFORM_VIOLATION"], 0),
+        "zone_intrusion": by_type.get(COMPLIANCE_RULE_IDS["ZONE_INTRUSION"], 0),
+        "animal_intrusion": by_type.get(COMPLIANCE_RULE_IDS["ANIMAL_INTRUSION"], 0),
+        "vehicle_intrusion": by_type.get(COMPLIANCE_RULE_IDS["VEHICLE_INTRUSION"], 0),
+        "no_hand_sanitization": by_type.get(COMPLIANCE_RULE_IDS["NO_HAND_SANITIZATION"], 0),
+        "no_boot_sanitization": by_type.get(COMPLIANCE_RULE_IDS["NO_BOOT_SANITIZATION"], 0),
+        "biosecurity_process_violation": by_type.get(COMPLIANCE_RULE_IDS["BIOSECURITY_PROCESS_VIOLATION"], 0),
+    }

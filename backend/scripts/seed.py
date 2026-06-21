@@ -841,7 +841,8 @@ def seed() -> None:
                 id="USR-ADMIN",
                 email="admin@ams.local",
                 full_name="AMS Administrator",
-                role="admin",
+                role="SUPER_ADMIN",
+                farm_id="FARM-001",
                 hashed_password=hash_password("admin123"),
                 is_active=True,
             )

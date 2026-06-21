@@ -9,6 +9,7 @@ from app.core.redis import get_redis_client
 from app.core.security import create_access_token, decode_access_token, verify_password
 from app.database.session import get_db
 from app.models import TokenBlacklist, User
+from app.core.roles import normalize_role
 from app.schemas.auth import LoginRequest, LogoutResponse, TokenResponse, UserMeResponse
 from app.services.audit import write_audit_log
 
@@ -44,6 +45,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         action="login",
         resource_type="auth",
         resource_id=user.id,
+        farm_id=user.farm_id,
         metadata={"email": user.email},
     )
     db.commit()
@@ -88,6 +90,7 @@ def me(current_user: User = Depends(get_current_user)) -> UserMeResponse:
         id=current_user.id,
         email=current_user.email,
         full_name=current_user.full_name,
-        role=current_user.role,
+        role=normalize_role(current_user.role),
+        farm_id=current_user.farm_id,
         is_active=current_user.is_active,
     )

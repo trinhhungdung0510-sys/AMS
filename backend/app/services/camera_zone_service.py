@@ -115,6 +115,7 @@ def create_camera_zone(db: Session, camera_id: str, payload: CameraZoneCreate) -
     now = utc_now_iso()
     zone = CameraZone(
         id=new_camera_zone_id(),
+        farm_id=camera.farm_id,
         camera_id=camera_id,
         parent_zone_id=payload.parent_zone_id,
         name=payload.name,

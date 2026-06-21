@@ -2,6 +2,9 @@
 
 SEVERITY_LABELS = {
     "CRITICAL": "Nghiêm trọng",
+    "HIGH": "Mức cao",
+    "MEDIUM": "Cảnh báo",
+    "LOW": "Thông tin",
     "WARNING": "Cảnh báo",
     "INFO": "Thông tin",
     "critical": "Nghiêm trọng",
@@ -14,8 +17,10 @@ SEVERITY_LABELS = {
 }
 
 SEVERITY_EMAIL_PREFIX = {
+    "CRITICAL": "NGHIÊM TRỌNG",
     "critical": "NGHIÊM TRỌNG",
     "danger": "NGHIÊM TRỌNG",
+    "HIGH": "MỨC CAO",
     "high": "MỨC CAO",
     "medium": "CẢNH BÁO",
     "warning": "CẢNH BÁO",

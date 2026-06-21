@@ -17,6 +17,7 @@ class UserMeResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    farm_id: str
     is_active: bool
 
 

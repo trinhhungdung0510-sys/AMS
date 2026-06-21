@@ -1,4 +1,4 @@
-export const APP_VERSION = 'v4.0'
+export const APP_VERSION = 'v2.0'
 
 export const alertTypes = {
   dress: 'Người không đúng trang phục',
@@ -45,6 +45,10 @@ export const pageMeta = {
   monitoring: {
     title: 'Giám sát',
     subtitle: 'Lưới camera và cảnh báo AI thời gian thực',
+  },
+  'compliance-center': {
+    title: 'Compliance Center',
+    subtitle: 'Trung tâm bằng chứng vi phạm tuân thủ — ảnh, vị trí, thời gian',
   },
   camera: {
     title: 'Camera',

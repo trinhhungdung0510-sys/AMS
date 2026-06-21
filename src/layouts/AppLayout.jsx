@@ -6,6 +6,13 @@ import { useAuth } from '../context/AuthContext'
 import { getCameraById, pageMeta } from '../data/mockData'
 
 function getPageMeta(pathname, search) {
+  if (pathname === '/monitoring/compliance-center') {
+    return {
+      title: 'Compliance Center',
+      subtitle: 'Trung tâm bằng chứng vi phạm tuân thủ — ảnh, vị trí, thời gian',
+    }
+  }
+
   if (pathname.startsWith('/monitoring/')) {
     const cameraId = pathname.split('/')[2]
     const camera = getCameraById(cameraId)

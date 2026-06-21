@@ -1,16 +1,94 @@
-# React + Vite
+# AMS — Animal Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Giám sát an toàn sinh học (ATSH) trên camera IP — dashboard realtime, compliance engine, multi-farm RBAC.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Requirements
 
-## React Compiler
+| Component | Version |
+|-----------|---------|
+| **Python (backend)** | **3.11+** |
+| Node.js (frontend) | 18+ |
+| PostgreSQL | 14+ |
+| Redis | 6+ |
+| FFmpeg | 4.4+ (production, RTSP) |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+> **Required Python Version = 3.11+**  
+> Backend **không chạy** trên Python 3.9/3.10 nếu thiếu cú pháp PEP 604. Chi tiết: [PYTHON_RUNTIME_REQUIREMENTS.md](./PYTHON_RUNTIME_REQUIREMENTS.md)
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Quick Start
+
+```bash
+# Backend (Python 3.11+)
+cd backend
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+alembic upgrade head && python scripts/seed.py
+uvicorn app.main:app --port 8000
+
+# Frontend
+cd ..
+npm install && npm run dev
+```
+
+Mở http://localhost:5173 — `admin@ams.local` / `admin123`
+
+Hướng dẫn đầy đủ: [INSTALL.md](./INSTALL.md) · [QUICK_START.md](./QUICK_START.md)
+
+---
+
+## Project Structure
+
+```
+AMS/
+├── backend/          # FastAPI (Python 3.11+)
+│   └── app/          # API, compliance, workflow, services
+├── src/              # React + Vite frontend
+├── docs/             # Brochure, deployment, pilot, pricing
+└── scripts/          # deploymentCheck.js
+```
+
+---
+
+## Documentation
+
+| Doc | Mục đích |
+|-----|----------|
+| [INSTALL.md](./INSTALL.md) | Cài đặt |
+| [PYTHON_RUNTIME_REQUIREMENTS.md](./PYTHON_RUNTIME_REQUIREMENTS.md) | Yêu cầu Python & cú pháp 3.10+ |
+| [docs/AMS_SOLUTION_OVERVIEW.md](./docs/AMS_SOLUTION_OVERVIEW.md) | Tổng quan giải pháp |
+| [docs/AMS_DEPLOYMENT_GUIDE.md](./docs/AMS_DEPLOYMENT_GUIDE.md) | Triển khai |
+| [AMS_PRODUCTION_READINESS.md](./AMS_PRODUCTION_READINESS.md) | Production readiness |
+
+---
+
+## Build
+
+```bash
+# Frontend
+npm run build
+
+# Backend tests
+cd backend && pytest tests/ -q
+```
+
+---
+
+## Demo Mode
+
+```env
+# backend/.env
+DEMO_MODE=true
+```
+
+Không cần camera thật — event realtime qua WebSocket. Xem Settings → Demo mode.
+
+---
+
+## License
+
+Proprietary — AMS internal deployment.

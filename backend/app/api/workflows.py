@@ -7,9 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.farm_access import assert_farm_access, resolve_farm_scope
+from app.core.permissions import require_permission
+from app.core.roles import DEFAULT_FARM_ID
 from app.data.workflow_defaults import DEFAULT_PERSON_ENTRY_WORKFLOW, WORKFLOW_VIOLATION_CODES
 from app.database.session import get_db
-from app.models import Workflow, WorkflowStep
+from app.models import User, Workflow, WorkflowStep
 from app.schemas.workflow import (
     WorkflowComplianceSummary,
     WorkflowCreate,
@@ -26,6 +29,7 @@ from app.services.workflow_engine import (
     get_workflow_dashboard,
     get_workflow_history,
 )
+from app.services.audit import write_audit_log
 
 router = APIRouter(prefix="/workflows", tags=["workflows"],
     dependencies=[Depends(get_current_user)]
@@ -120,9 +124,30 @@ def workflow_history(
 
 
 @router.get("", response_model=list[WorkflowResponse])
-def list_workflows(db: Session = Depends(get_db)) -> list[WorkflowResponse]:
-    workflows = list(db.scalars(select(Workflow).order_by(Workflow.id)))
+def list_workflows(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("workflow.read")),
+) -> list[WorkflowResponse]:
+    scope = resolve_farm_scope(current_user)
+    query = select(Workflow).order_by(Workflow.id)
+    if scope:
+        query = query.where(Workflow.farm_id == scope)
+    workflows = list(db.scalars(query))
     return [_load_workflow_response(db, workflow) for workflow in workflows]
+
+
+@router.get("/definitions/biosecurity")
+def list_biosecurity_workflow_definitions() -> list[dict]:
+    from app.biosecurity_workflow.workflow_manager import get_workflow_manager
+
+    return [
+        {
+            "id": definition.id,
+            "name": definition.name,
+            "steps": definition.steps,
+        }
+        for definition in get_workflow_manager().list_definitions()
+    ]
 
 
 @router.get("/{workflow_id}", response_model=WorkflowResponse)
@@ -131,13 +156,21 @@ def get_workflow(workflow_id: str, db: Session = Depends(get_db)) -> WorkflowRes
 
 
 @router.post("", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
-def create_workflow(payload: WorkflowCreate, db: Session = Depends(get_db)) -> WorkflowResponse:
+def create_workflow(
+    payload: WorkflowCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("workflow.manage")),
+) -> WorkflowResponse:
     workflow_id = payload.id or f"WF-{uuid.uuid4().hex[:8].upper()}"
     if db.get(Workflow, workflow_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow id already exists")
 
+    farm_id = getattr(payload, "farm_id", None) or current_user.farm_id or DEFAULT_FARM_ID
+    assert_farm_access(current_user, farm_id)
+
     workflow = Workflow(
         id=workflow_id,
+        farm_id=farm_id,
         name=payload.name,
         description=payload.description,
         object_type=payload.object_type.lower(),
@@ -156,6 +189,15 @@ def create_workflow(payload: WorkflowCreate, db: Session = Depends(get_db)) -> W
                 required=step.required,
             )
         )
+    write_audit_log(
+        db,
+        user_id=current_user.id,
+        action="create_workflow",
+        resource_type="workflow",
+        resource_id=workflow_id,
+        farm_id=farm_id,
+        metadata={"name": payload.name},
+    )
     db.commit()
     return _load_workflow_response(db, workflow)
 
@@ -165,8 +207,10 @@ def update_workflow(
     workflow_id: str,
     payload: WorkflowUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("workflow.manage")),
 ) -> WorkflowResponse:
     workflow = _get_workflow_or_404(workflow_id, db)
+    assert_farm_access(current_user, workflow.farm_id)
     values = payload.model_dump(exclude_unset=True)
     steps = values.pop("steps", None)
     for field, value in values.items():
@@ -192,16 +236,39 @@ def update_workflow(
             )
 
     db.add(workflow)
+    write_audit_log(
+        db,
+        user_id=current_user.id,
+        action="update_workflow",
+        resource_type="workflow",
+        resource_id=workflow.id,
+        farm_id=workflow.farm_id,
+        metadata={"fields": list(values.keys()) if steps is None else list(values.keys()) + ["steps"]},
+    )
     db.commit()
     db.refresh(workflow)
     return _load_workflow_response(db, workflow)
 
 
 @router.delete("/{workflow_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_workflow(workflow_id: str, db: Session = Depends(get_db)) -> None:
+def delete_workflow(
+    workflow_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("workflow.manage")),
+) -> None:
     workflow = _get_workflow_or_404(workflow_id, db)
+    assert_farm_access(current_user, workflow.farm_id)
     steps = list(db.scalars(select(WorkflowStep).where(WorkflowStep.workflow_id == workflow_id)))
     for step in steps:
         db.delete(step)
+    write_audit_log(
+        db,
+        user_id=current_user.id,
+        action="delete_workflow",
+        resource_type="workflow",
+        resource_id=workflow.id,
+        farm_id=workflow.farm_id,
+        metadata={"name": workflow.name},
+    )
     db.delete(workflow)
     db.commit()

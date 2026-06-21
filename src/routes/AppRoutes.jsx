@@ -4,13 +4,19 @@ import AppLayout from '../layouts/AppLayout'
 import AtshRulesPage from '../pages/AtshRulesPage'
 import CameraDetailPage from '../pages/CameraDetailPage'
 import CameraPage from '../pages/CameraPage'
+import ComplianceCenterPage from '../pages/ComplianceCenterPage'
 import ComplianceDashboardPage from '../pages/ComplianceDashboardPage'
 import DashboardPage from '../pages/DashboardPage'
+import DiagnosticsPage from '../pages/DiagnosticsPage'
 import EventsPage from '../pages/EventsPage'
 import FarmControlDashboardPage from '../pages/FarmControlDashboardPage'
 import LoginPage from '../pages/LoginPage'
 import MonitoringPage from '../pages/MonitoringPage'
 import SettingsPage from '../pages/SettingsPage'
+import SetupWizardPage from '../pages/SetupWizardPage'
+import SnapshotBrowserPage from '../pages/SnapshotBrowserPage'
+import SystemStatusPage from '../pages/SystemStatusPage'
+import UniformsPage from '../pages/UniformsPage'
 import ViolationDetailPage from '../pages/ViolationDetailPage'
 import ViolationsPage from '../pages/ViolationsPage'
 import ZoneDesignerPage from '../pages/ZoneDesignerPage'
@@ -42,6 +48,7 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/compliance" element={<ComplianceDashboardPage />} />
         <Route path="/monitoring" element={<MonitoringPage />} />
+        <Route path="/monitoring/compliance-center" element={<ComplianceCenterPage />} />
         <Route path="/monitoring/:cameraId" element={<CameraDetailPage />} />
         <Route path="/camera" element={<CameraPage />} />
         <Route path="/events" element={<EventsPage />} />
@@ -55,6 +62,11 @@ function AppRoutes() {
         <Route path="/map" element={<FarmMapRedirect />} />
         <Route path="/thiet-ke-trang-trai" element={<FarmMapRedirect />} />
         <Route path="/thiet-ke-vung-atsh" element={<ZoneDesignerPage />} />
+        <Route path="/setup" element={<SetupWizardPage />} />
+        <Route path="/system-status" element={<SystemStatusPage />} />
+        <Route path="/diagnostics" element={<DiagnosticsPage />} />
+        <Route path="/evidence" element={<SnapshotBrowserPage />} />
+        <Route path="/uniforms" element={<UniformsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/zones" element={<Navigate to="/thiet-ke-vung-atsh" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

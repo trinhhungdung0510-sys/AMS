@@ -97,14 +97,28 @@ export function normalizeEngineEvent(event) {
   const { severityRaw, severity } = normalizeSeverity(event.severity || event.muc_do)
   const { statusRaw, status } = normalizeStatus(event.status || event.trang_thai)
   const rawConfidence = event.confidence ?? event.confidence_score ?? event.do_tin_cay
+  const scoreRaw = event.score ?? event.confidence_score ?? (rawConfidence != null && Number(rawConfidence) <= 1 ? rawConfidence : null)
   const confidence = rawConfidence != null
     ? Math.round(Number(rawConfidence) * (Number(rawConfidence) <= 1 ? 100 : 1))
-    : 0
+    : scoreRaw != null
+      ? Math.round(Number(scoreRaw) * (Number(scoreRaw) <= 1 ? 100 : 1))
+      : 0
+
+  const eventType = event.event_type || event.eventType || event.alert_type || event.ten_vi_pham
+  const ruleName = event.ruleName || event.rule_name
+  const typeLabels = {
+    UNIFORM_VIOLATION: '⚠ Sai đồng phục',
+    ZONE_INTRUSION: 'Xâm nhập vùng cấm',
+    ANIMAL_INTRUSION: 'Động vật xâm nhập',
+    VEHICLE_INTRUSION: 'Xe vi phạm',
+    NO_HAND_SANITIZATION: 'Không rửa tay sát trùng',
+    NO_BOOT_SANITIZATION: 'Không sát trùng ủng',
+  }
 
   return {
     id,
-    eventType: event.event_type || event.eventType || event.alert_type || event.ten_vi_pham,
-    typeLabel: event.event_type || event.eventType || event.rule_name || event.alert_type || event.ten_vi_pham || 'Sự kiện',
+    eventType,
+    typeLabel: typeLabels[eventType] || ruleName || eventType || 'Sự kiện',
     cameraId: event.camera_id,
     cameraName: event.camera_name || event.camera_id,
     zoneId: event.zone_id,
@@ -116,6 +130,11 @@ export function normalizeEngineEvent(event) {
     status,
     handler: 'Chưa phân công',
     confidence,
+    score: scoreRaw ?? confidence / 100,
+    snapshotPath: event.snapshotPath || event.snapshot_url || event.snapshot_path,
+    snapshotUrl: null,
+    ruleId: event.ruleId || event.rule_id,
+    ruleName,
     date,
     time,
     occurredAt,

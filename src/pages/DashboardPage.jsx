@@ -20,8 +20,12 @@ import {
 
 import { LOGO_SRC } from '../components/BrandLogo'
 import RealtimeDashboardWidgets from '../components/realtime/RealtimeDashboardWidgets'
+import ComplianceKpiWidgets from '../components/dashboard/ComplianceKpiWidgets'
+import TopViolationsWidget from '../components/dashboard/TopViolationsWidget'
+import CameraHealthWidget from '../components/dashboard/CameraHealthWidget'
 import { useEventStore } from '../context/EventStore'
 import { API_BASE_URL } from '../config/api'
+import { fetchCameraHealthSummary, fetchComplianceKpis, fetchTopViolations } from '../services/reportsService'
 
 const COLORS = ['#0B6B1B', '#F36A10', '#dc2626', '#facc15', '#64748b']
 
@@ -54,6 +58,10 @@ function DashboardPage() {
   const [workflowCompliance, setWorkflowCompliance] = useState(null)
   const [workflowDashboard, setWorkflowDashboard] = useState(null)
   const [atshSummary, setAtshSummary] = useState(null)
+  const [complianceKpis, setComplianceKpis] = useState(null)
+  const [topViolations, setTopViolations] = useState([])
+  const [cameraHealth, setCameraHealth] = useState(null)
+  const [reportLoading, setReportLoading] = useState(true)
   const stats = [
     { label: 'Event đang mở', value: metrics.openEvents, icon: ShieldAlert, tone: 'orange' },
     { label: 'Event nghiêm trọng', value: metrics.criticalEvents, icon: Activity, tone: 'red' },
@@ -109,13 +117,35 @@ function DashboardPage() {
       }
     }
 
+    const loadReportWidgets = async () => {
+      try {
+        setReportLoading(true)
+        const [kpis, topItems, health] = await Promise.all([
+          fetchComplianceKpis(),
+          fetchTopViolations(7, 10),
+          fetchCameraHealthSummary(),
+        ])
+        setComplianceKpis(kpis)
+        setTopViolations(topItems.items || [])
+        setCameraHealth(health)
+      } catch {
+        setComplianceKpis(null)
+        setTopViolations([])
+        setCameraHealth(null)
+      } finally {
+        setReportLoading(false)
+      }
+    }
+
     loadWorkflowCompliance()
     loadWorkflowDashboard()
     loadAtshSummary()
+    loadReportWidgets()
     const workflowTimer = setInterval(() => {
       loadWorkflowCompliance()
       loadWorkflowDashboard()
       loadAtshSummary()
+      loadReportWidgets()
     }, 15000)
     return () => {
       clearInterval(timer)
@@ -127,6 +157,11 @@ function DashboardPage() {
     <div className="dashboard-page">
       <img src={LOGO_SRC} alt="TIN NGHIA AMS" className="dashboard-page__brand-mark" />
       <RealtimeDashboardWidgets />
+      <ComplianceKpiWidgets kpis={complianceKpis} loading={reportLoading} />
+      <section className="dashboard-grid dashboard-grid--lists">
+        <TopViolationsWidget items={topViolations} loading={reportLoading} />
+        <CameraHealthWidget summary={cameraHealth} loading={reportLoading} />
+      </section>
       <section className="stat-grid">
         {stats.map((stat) => (
           <article key={stat.label} className={`metric-card metric-card--${stat.tone}`}>

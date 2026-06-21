@@ -1,6 +1,3 @@
-import json
-import uuid
-from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -16,9 +13,15 @@ def write_audit_log(
     resource_type: str,
     resource_id: str,
     metadata: Optional[dict] = None,
+    farm_id: Optional[str] = None,
 ) -> AuditLog:
+    import json
+    import uuid
+    from datetime import datetime, timezone
+
     log = AuditLog(
         id=f"AUD-{uuid.uuid4().hex[:12].upper()}",
+        farm_id=farm_id,
         user_id=user_id,
         action=action,
         resource_type=resource_type,

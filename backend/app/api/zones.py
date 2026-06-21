@@ -10,8 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.data.zone_designer_catalog import ATSH_LEVEL_COLORS, ATSH_LEVEL_LABELS, ZONE_DESIGNER_TYPES
+from app.core.permissions import require_permission
 from app.database.session import get_db
-from app.models import ZonePolygon
+from app.models import User, ZonePolygon
 from app.schemas.camera_editor_zone import CameraEditorZoneUpdate
 from app.schemas.camera_zone import CameraZoneUpdate
 from app.schemas.zone import (
@@ -41,6 +42,7 @@ from app.services.zone_designer_engine import (
     validate_zone_type,
     zone_to_response_dict,
 )
+from app.services.audit import write_audit_log
 
 router = APIRouter(prefix="/zones", tags=["zone-designer"],
     dependencies=[Depends(get_current_user)]
@@ -110,7 +112,11 @@ def get_zone(zone_id: str, db: Session = Depends(get_db)) -> ZonePolygonResponse
 
 
 @router.post("", response_model=ZonePolygonResponse, status_code=status.HTTP_201_CREATED)
-def create_zone(payload: ZonePolygonCreate, db: Session = Depends(get_db)) -> ZonePolygonResponse:
+def create_zone(
+    payload: ZonePolygonCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("zone.manage")),
+) -> ZonePolygonResponse:
     try:
         validate_zone_type(payload.zone_type)
         level = resolve_default_level(payload.zone_type, payload.biosecurity_level)
@@ -137,6 +143,15 @@ def create_zone(payload: ZonePolygonCreate, db: Session = Depends(get_db)) -> Zo
         created_at=datetime.now(timezone.utc).isoformat(),
     )
     db.add(zone)
+    write_audit_log(
+        db,
+        user_id=current_user.id,
+        action="create_zone",
+        resource_type="zone_polygon",
+        resource_id=zone.id,
+        farm_id=zone.farm_id,
+        metadata={"zone_name": zone.zone_name},
+    )
     db.commit()
     db.refresh(zone)
     return _to_response(zone)
@@ -195,9 +210,22 @@ def update_zone(zone_id: str, body: dict = Body(...), db: Session = Depends(get_
 
 
 @router.delete("/{zone_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_zone(zone_id: str, db: Session = Depends(get_db)) -> None:
+def delete_zone(
+    zone_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("zone.manage")),
+) -> None:
     camera_zone = get_camera_zone_or_none(db, zone_id)
     if camera_zone is not None:
+        write_audit_log(
+            db,
+            user_id=current_user.id,
+            action="delete_zone",
+            resource_type="camera_zone",
+            resource_id=camera_zone.id,
+            farm_id=camera_zone.farm_id,
+            metadata={"name": camera_zone.name},
+        )
         delete_camera_zone(db, camera_zone)
         return
 
@@ -207,5 +235,14 @@ def delete_zone(zone_id: str, db: Session = Depends(get_db)) -> None:
         return
 
     zone = _get_zone_or_404(zone_id, db)
+    write_audit_log(
+        db,
+        user_id=current_user.id,
+        action="delete_zone",
+        resource_type="zone_polygon",
+        resource_id=zone.id,
+        farm_id=zone.farm_id,
+        metadata={"zone_name": zone.zone_name},
+    )
     db.delete(zone)
     db.commit()
