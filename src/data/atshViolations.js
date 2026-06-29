@@ -107,30 +107,39 @@ export function computeAtshKpis(items) {
 }
 
 export function mapApiEventToViolation(event) {
+  const title = event.ten_vi_pham || event.title || event.event_type || event.eventType
   const matched = ATSH_VIOLATION_TYPES.find((item) =>
-    event.ten_vi_pham?.toLowerCase().includes(item.label.toLowerCase().slice(0, 6)),
+    title?.toLowerCase().includes(item.label.toLowerCase().slice(0, 6)),
   )
   const typeDef = matched || typeByCode.forbidden_intrusion
-  const [datePart, timePart] = (event.thoi_gian || '').split('T')
+  const occurred = event.thoi_gian || event.started_at || event.occurred_at || ''
+  const [datePart, timePart] = occurred.split('T')
   const time = timePart ? timePart.slice(0, 5) : '00:00'
 
   let status = 'new'
-  if (event.trang_thai === 'Đã xử lý') status = 'resolved'
-  else if (event.trang_thai === 'Đang xử lý') status = 'confirmed'
+  const rawStatus = event.trang_thai || event.status || ''
+  if (rawStatus === 'Đã xử lý' || rawStatus === 'resolved' || rawStatus === 'RESOLVED') status = 'resolved'
+  else if (rawStatus === 'Đang xử lý' || rawStatus === 'processing') status = 'confirmed'
+
+  const severityRaw = event.muc_do || event.severityLabel || event.severity || 'INFO'
 
   return {
     id: event.id,
     type: typeDef.code,
-    typeLabel: event.ten_vi_pham || typeDef.label,
+    typeLabel: title || typeDef.label,
     typeGroup: typeDef.group,
-    cameraId: '',
-    cameraName: event.ten_camera,
-    zone: event.ten_vung,
-    severity: event.muc_do?.includes('Nghiêm') ? 'CRITICAL' : event.muc_do?.includes('Cảnh') ? 'WARNING' : 'INFO',
-    confidence: event.do_tin_cay ?? 90,
+    cameraId: event.camera_id || event.cameraId || '',
+    cameraName: event.ten_camera || event.camera_name || event.cameraName,
+    zone: event.ten_vung || event.zone_name || event.zoneName,
+    severity: severityRaw?.includes('Nghiêm') || severityRaw === 'CRITICAL'
+      ? 'CRITICAL'
+      : severityRaw?.includes('Cảnh') || severityRaw === 'WARNING'
+        ? 'WARNING'
+        : 'INFO',
+    confidence: event.do_tin_cay ?? (event.confidence != null ? Math.round(Number(event.confidence) * (Number(event.confidence) <= 1 ? 100 : 1)) : 90),
     date: datePart || TODAY,
     time,
-    datetime: event.thoi_gian || `${TODAY}T${time}:00`,
+    datetime: occurred || `${TODAY}T${time}:00`,
     status,
     handler: event.nguoi_xu_ly || 'Chưa phân công',
     person: null,

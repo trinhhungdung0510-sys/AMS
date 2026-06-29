@@ -148,6 +148,11 @@ def handle_event_created(message: dict[str, Any]) -> None:
     if not event:
         return
 
+    from app.services.violation_notification_service import is_atsh_violation_event, is_open_violation_event
+
+    if is_open_violation_event(event) and is_atsh_violation_event(event):
+        return
+
     _publish(
         topics.NOTIFICATION_CREATED,
         {

@@ -89,4 +89,11 @@ describe('event store flow (no page refresh)', () => {
     expect(events[0].status).toBe('resolved')
     expect(computeEventMetrics(events, [], '2026-06-20').openEvents).toBe(0)
   })
+
+  it('removes events when event.removed arrives', () => {
+    let events = applyWsMessage([], YOLO_DETECTION)
+    const eventId = YOLO_DETECTION.payload.event.id
+    events = events.filter((item) => item.id !== eventId)
+    expect(events).toHaveLength(0)
+  })
 })

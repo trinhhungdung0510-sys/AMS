@@ -340,6 +340,7 @@ NOTIFICATION_GATEWAYS = [
     ("GW-001", "FARM-001", "telegram", "@ams_farm_longan_alerts", True, "online"),
     ("GW-002", "FARM-001", "email", "ops-longan@ams.local", True, "online"),
     ("GW-003", "FARM-002", "webhook", "https://hooks.ams.local/dongnai", True, "online"),
+    ("GW-004", "FARM-001", "zalo", "ams-farm-zalo-oa", True, "online"),
 ]
 
 LICENSES = [

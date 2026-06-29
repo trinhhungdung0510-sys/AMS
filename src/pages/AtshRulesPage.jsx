@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, RefreshCw, Shirt } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import {
+  ATSH_RULE_GROUPS,
   ATSH_RULE_SEVERITY,
   DEFAULT_ATSH_RULES,
+  groupAtshRules,
   mergeRules,
 } from '../data/atshRules'
 import { API_BASE_URL } from '../config/api'
@@ -11,7 +14,11 @@ function AtshRulesPage() {
   const [rules, setRules] = useState(DEFAULT_ATSH_RULES)
   const [selectedId, setSelectedId] = useState(DEFAULT_ATSH_RULES[0].id)
   const [status, setStatus] = useState('Sẵn sàng')
+  const [expandedGroups, setExpandedGroups] = useState(() =>
+    Object.fromEntries(ATSH_RULE_GROUPS.map((group) => [group.id, true])),
+  )
 
+  const groupedRules = useMemo(() => groupAtshRules(rules), [rules])
   const selected = rules.find((item) => item.id === selectedId) || rules[0]
   const severity = ATSH_RULE_SEVERITY[selected?.severity] || ATSH_RULE_SEVERITY.WARNING
 
@@ -62,12 +69,16 @@ function AtshRulesPage() {
     }
   }
 
+  const toggleGroup = (groupId) => {
+    setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }))
+  }
+
   return (
     <div className="atsh-rules">
       <header className="atsh-rules__hero">
         <div>
           <h1>Quy tắc ATSH</h1>
-          <p>Danh sách quy tắc an toàn sinh học — bật hoặc tắt theo nhu cầu trại.</p>
+          <p>Quản lý quy tắc an toàn sinh học theo nhóm — bật hoặc tắt theo nhu cầu trại.</p>
         </div>
         <button type="button" className="btn btn--outline" onClick={loadRules}>
           <RefreshCw size={16} /> Tải lại
@@ -78,27 +89,66 @@ function AtshRulesPage() {
 
       <div className="atsh-rules__layout">
         <section className="atsh-rules__list panel">
-          <h2>Danh sách quy tắc</h2>
-          <ul>
-            {rules.map((rule) => {
-              const ruleSeverity = ATSH_RULE_SEVERITY[rule.severity] || ATSH_RULE_SEVERITY.WARNING
+          <h2>Nhóm quy tắc</h2>
+          <div className="atsh-rule-groups">
+            {groupedRules.map((group) => {
+              const expanded = expandedGroups[group.id] ?? true
               return (
-                <li key={rule.id}>
+                <div
+                  key={group.id}
+                  className={`atsh-rule-group${expanded ? ' atsh-rule-group--expanded' : ''}`}
+                >
                   <button
                     type="button"
-                    className={`atsh-rule-item${selectedId === rule.id ? ' atsh-rule-item--active' : ''}`}
-                    onClick={() => setSelectedId(rule.id)}
+                    className="atsh-rule-group__toggle"
+                    aria-expanded={expanded}
+                    onClick={() => toggleGroup(group.id)}
                   >
-                    <span className={`atsh-rule-item__dot atsh-rule-item__dot--${ruleSeverity.tone}`} />
-                    <span>
-                      <strong>{rule.name}</strong>
-                      <small>{rule.enabled ? 'Đang bật' : 'Đang tắt'}</small>
+                    <span>{group.label}</span>
+                    <span className="atsh-rule-group__meta">
+                      {group.rules.length > 0 ? `${group.rules.length} quy tắc` : 'Quản lý'}
                     </span>
+                    <ChevronDown size={16} className="atsh-rule-group__chevron" />
                   </button>
-                </li>
+
+                  {expanded ? (
+                    <div className="atsh-rule-group__body">
+                      {group.linkTo ? (
+                        <Link to={group.linkTo} className="atsh-rule-group__link">
+                          <Shirt size={16} />
+                          <span>
+                            <strong>Quản lý đồng phục</strong>
+                            <small>{group.description}</small>
+                          </span>
+                        </Link>
+                      ) : null}
+
+                      <ul className="atsh-rule-group__list">
+                        {group.rules.map((rule) => {
+                          const ruleSeverity = ATSH_RULE_SEVERITY[rule.severity] || ATSH_RULE_SEVERITY.WARNING
+                          return (
+                            <li key={rule.id}>
+                              <button
+                                type="button"
+                                className={`atsh-rule-item${selectedId === rule.id ? ' atsh-rule-item--active' : ''}`}
+                                onClick={() => setSelectedId(rule.id)}
+                              >
+                                <span className={`atsh-rule-item__dot atsh-rule-item__dot--${ruleSeverity.tone}`} />
+                                <span>
+                                  <strong>{rule.name}</strong>
+                                  <small>{rule.enabled ? 'Đang bật' : 'Đang tắt'}</small>
+                                </span>
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
               )
             })}
-          </ul>
+          </div>
         </section>
 
         <aside className="atsh-rules__detail panel">

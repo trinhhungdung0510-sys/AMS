@@ -32,6 +32,7 @@ from app.api.health import router as health_router
 from app.api.licenses import router as licenses_router
 from app.api.map import router as map_router
 from app.api.notifications import router as notifications_router
+from app.api.notification import router as notification_router
 from app.api.observations import router as observations_router
 from app.api.realtime import router as realtime_router
 from app.api.reports import router as reports_router
@@ -57,6 +58,8 @@ from app.services.event_stream_service import event_stream_service
 from app.compliance.compliance_engine import init_compliance_engine
 from app.biosecurity_workflow.workflow_manager import init_workflow_manager
 from app.services.pipeline_subscribers import register_pipeline_subscribers
+from app.services.violation_notification_service import register_violation_notification_subscriber
+from app.services.system_alert_notification_service import register_system_alert_gmail_subscriber
 from app.services.rtsp_simulator import rtsp_simulator_worker
 from app.services.detector_runtime_service import register_default_detectors, shutdown_detectors
 from app.services.runtime_metrics_service import register_metrics_subscribers
@@ -114,6 +117,7 @@ app.include_router(map_router, prefix=settings.api_prefix)
 app.include_router(licenses_router, prefix=settings.api_prefix)
 app.include_router(observations_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
+app.include_router(notification_router, prefix=settings.api_prefix)
 app.include_router(smart_farm_router, prefix=settings.api_prefix)
 app.include_router(snapshots_router, prefix=settings.api_prefix)
 app.include_router(stress_router, prefix=settings.api_prefix)
@@ -154,6 +158,8 @@ app.mount("/demo-assets", StaticFiles(directory=str(demo_assets_path)), name="de
 @app.on_event("startup")
 async def start_rtsp_simulator() -> None:
     register_pipeline_subscribers()
+    register_violation_notification_subscriber()
+    register_system_alert_gmail_subscriber()
     init_compliance_engine()
     init_workflow_manager()
     register_metrics_subscribers()
@@ -188,9 +194,16 @@ async def start_rtsp_simulator() -> None:
 
 
 async def _camera_health_monitor_worker(stop_event: asyncio.Event) -> None:
+    from app.services.health import check_database
+    from app.services.system_alert_notification_service import notify_database_unavailable
+
     while not stop_event.is_set():
         db = SessionLocal()
         try:
+            try:
+                check_database(db)
+            except Exception as exc:
+                notify_database_unavailable(error=str(exc))
             camera_health_service.evaluate_statuses(db)
         finally:
             db.close()

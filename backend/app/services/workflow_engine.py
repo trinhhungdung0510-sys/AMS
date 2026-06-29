@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.data.workflow_defaults import (
@@ -157,32 +157,37 @@ def get_workflow_history(
 
 def get_workflow_dashboard(db: Session) -> dict:
     today_prefix = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    filters = (
+        Event.category == "workflow_violation",
+        Event.occurred_at.like(f"{today_prefix}%"),
+    )
+
+    vi_pham_hom_nay = db.scalar(select(func.count()).select_from(Event).where(*filters)) or 0
+
     today_violations = list(
         db.scalars(
             select(Event)
-            .where(Event.category == "workflow_violation")
-            .where(Event.occurred_at.like(f"{today_prefix}%"))
+            .where(*filters)
             .order_by(Event.occurred_at.desc())
+            .limit(10)
         )
     )
 
-    workflow_counts: dict[str, int] = {}
-    for event in today_violations:
-        workflow_name = _extract_workflow_name(event.alert_type)
-        workflow_counts[workflow_name] = workflow_counts.get(workflow_name, 0) + 1
-
-    top_workflows = sorted(
-        (
-            {"ten_quy_trinh": name, "so_vi_pham": count}
-            for name, count in workflow_counts.items()
-        ),
-        key=lambda item: item["so_vi_pham"],
-        reverse=True,
-    )
+    workflow_rows = db.execute(
+        select(Event.alert_type, func.count())
+        .where(*filters)
+        .group_by(Event.alert_type)
+        .order_by(func.count().desc())
+        .limit(5)
+    ).all()
+    top_workflows = [
+        {"ten_quy_trinh": _extract_workflow_name(name), "so_vi_pham": int(count)}
+        for name, count in workflow_rows
+    ]
 
     return {
-        "vi_pham_hom_nay": len(today_violations),
-        "top_quy_trinh_bi_vi_pham": top_workflows[:5],
+        "vi_pham_hom_nay": int(vi_pham_hom_nay),
+        "top_quy_trinh_bi_vi_pham": top_workflows,
         "chi_tiet_hom_nay": [
             {
                 "event_id": event.id,
@@ -194,7 +199,7 @@ def get_workflow_dashboard(db: Session) -> dict:
                 "ten_vung": resolve_zone_name(db, event.zone),
                 "thoi_gian": event.occurred_at,
             }
-            for event in today_violations[:10]
+            for event in today_violations
         ],
     }
 
@@ -225,7 +230,12 @@ def get_track_detail(db: Session, track_id: int, camera_id: Optional[str] = None
     }
 
 
-def get_compliance_summary(db: Session, workflow_id: str) -> dict:
+def get_compliance_summary(
+    db: Session,
+    workflow_id: str,
+    *,
+    workflow_dashboard: Optional[dict] = None,
+) -> dict:
     workflow = db.get(Workflow, workflow_id)
     if not workflow:
         raise ValueError("Workflow not found")
@@ -268,7 +278,7 @@ def get_compliance_summary(db: Session, workflow_id: str) -> dict:
     if total_tracks:
         compliance_score = max(0, min(100, int((compliant_tracks / total_tracks) * 100)))
 
-    dashboard = get_workflow_dashboard(db)
+    dashboard = workflow_dashboard if workflow_dashboard is not None else get_workflow_dashboard(db)
 
     return {
         "workflow_id": workflow.id,

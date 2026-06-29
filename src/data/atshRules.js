@@ -115,6 +115,65 @@ const severityFromApi = {
   critical: 'CRITICAL',
 }
 
+export const ATSH_RULE_GROUPS = [
+  {
+    id: 'uniform',
+    label: 'Đồng phục',
+    codes: ['WRONG_UNIFORM'],
+    linkTo: '/uniforms',
+    description: 'Quản lý mẫu đồng phục, gán vùng và xem trước',
+  },
+  {
+    id: 'handwash',
+    label: 'Rửa tay',
+    codes: ['NO_HAND_SANITIZE'],
+  },
+  {
+    id: 'boot',
+    label: 'Sát trùng ủng',
+    codes: ['NO_BOOT_SANITIZE'],
+  },
+  {
+    id: 'vehicle',
+    label: 'Sát trùng xe',
+    codes: ['VEHICLE_NOT_SANITIZED', 'FEED_TRUCK_CONTACT', 'PIG_TRUCK_CONTACT'],
+  },
+  {
+    id: 'forbidden',
+    label: 'Vùng cấm',
+    codes: ['FORBIDDEN_ZONE', 'VEHICLE_FORBIDDEN'],
+  },
+  {
+    id: 'animal',
+    label: 'Động vật xâm nhập',
+    codes: ['ANIMAL_INTRUSION'],
+  },
+  {
+    id: 'other',
+    label: 'Các quy tắc khác',
+    codes: ['NO_SHOWER', 'STRANGER_CONTACT'],
+  },
+]
+
+export function groupAtshRules(rules = []) {
+  const assigned = new Set()
+  const groups = ATSH_RULE_GROUPS.map((group) => {
+    const items = rules.filter((rule) => group.codes.includes(rule.code))
+    items.forEach((rule) => assigned.add(rule.id))
+    return { ...group, rules: items }
+  })
+
+  const unassigned = rules.filter((rule) => !assigned.has(rule.id))
+  if (unassigned.length) {
+    const otherGroup = groups.find((group) => group.id === 'other')
+    if (otherGroup) {
+      otherGroup.rules = [...otherGroup.rules, ...unassigned]
+    }
+  }
+
+  return groups.filter((group) => group.rules.length > 0 || group.linkTo)
+}
+
 export function mapApiRule(item, index) {
   const fallback = DEFAULT_ATSH_RULES[index] || DEFAULT_ATSH_RULES[0]
   return {

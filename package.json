@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:up": "bash scripts/dev-up.sh",
+    "dev:local": "bash scripts/dev-local.sh",
+    "dev:stop": "bash scripts/dev-stop.sh",
+    "start": "npm run dev:up",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",

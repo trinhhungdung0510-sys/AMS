@@ -2,17 +2,19 @@ import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { LOGO_SRC } from '../components/BrandLogo'
 import { useAuth } from '../context/AuthContext'
-import { getCurrentUser, login as authLogin } from '../services/authService'
+import { login as authLogin, getToken } from '../services/authService'
+import { useDashboardBootstrap } from '../context/DashboardBootstrapStore'
 
 function LoginPage() {
   const navigate = useNavigate()
-  const { user, setUser, loading } = useAuth()
+  const { user, loading, setUser } = useAuth()
+  const { refreshBootstrap, loading: bootstrapLoading } = useDashboardBootstrap()
   const [email, setEmail] = useState('admin@ams.local')
   const [password, setPassword] = useState('admin123')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  if (loading) {
+  if ((loading || bootstrapLoading) && getToken() && !user) {
     return <div className="login-page farm-gis-map__loading">Đang tải…</div>
   }
 
@@ -26,9 +28,11 @@ function LoginPage() {
     setError('')
 
     try {
-      await authLogin(email, password)
-      const profile = await getCurrentUser()
-      setUser(profile)
+      const session = await authLogin(email, password)
+      if (session?.user) {
+        setUser(session.user)
+      }
+      void refreshBootstrap()
       navigate('/dashboard', { replace: true })
     } catch {
       setError('Email hoặc mật khẩu không đúng')

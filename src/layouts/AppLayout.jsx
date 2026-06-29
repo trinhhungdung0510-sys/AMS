@@ -1,6 +1,9 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
+import ErrorBoundary from '../components/common/ErrorBoundary'
+import GmailDeliveryAlert from '../components/notifications/GmailDeliveryAlert'
 import RealtimeEventFeed from '../components/realtime/RealtimeEventFeed'
+import ViolationProcessingDrawer from '../components/violations/ViolationProcessingDrawer'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/AuthContext'
 import { getCameraById, pageMeta } from '../data/mockData'
@@ -39,12 +42,6 @@ function getPageMeta(pathname, search) {
   }
 
   if (pathname === '/vi-pham-atsh' || pathname === '/violations') {
-    if (search.includes('tab=su-kien')) {
-      return {
-        title: 'Trung tâm vi phạm ATSH',
-        subtitle: 'Bảng cảnh báo AI với tìm kiếm, lọc và xuất Excel',
-      }
-    }
     return pageMeta['vi-pham-atsh']
   }
 
@@ -87,9 +84,12 @@ function AppLayout() {
         </div>
 
         <main className="page-content">
+          <GmailDeliveryAlert />
           <div className="page-content__grid">
             <div className="page-content__main">
-              <Outlet />
+              <ErrorBoundary fallbackTitle="Không thể hiển thị trang này">
+                <Outlet />
+              </ErrorBoundary>
             </div>
             <RealtimeEventFeed />
           </div>
@@ -100,6 +100,8 @@ function AppLayout() {
           <p>AI Monitoring Technology Agriculture</p>
         </footer>
       </div>
+
+      <ViolationProcessingDrawer />
     </div>
   )
 }

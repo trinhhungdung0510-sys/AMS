@@ -4,14 +4,26 @@ Triển khai AMS trong 1 ngày với Setup Wizard.
 
 ## 15-Minute Local Setup
 
+**Một lệnh (khuyến nghị):**
+
+```bash
+npm run dev:local
+```
+
+Script tự: bật Docker · tạo `.env` nếu thiếu · cài venv nếu thiếu · chạy backend + frontend · mở trình duyệt.
+
+Dừng: `npm run dev:stop`
+
+---
+
+**Thủ công (2 terminal):**
+
 ```bash
 # 1. Backend
-cd backend && cp .env.example .env 2>/dev/null || true
-alembic upgrade head && python scripts/seed.py
-uvicorn app.main:app --port 8000
+cd backend && docker compose up -d && ./scripts/start_backend.sh
 
-# 2. Frontend (terminal mới)
-cd .. && npm install && npm run dev
+# 2. Frontend
+npm run dev
 ```
 
 Mở http://localhost:5173 — đăng nhập `admin@ams.local` / `admin123`.

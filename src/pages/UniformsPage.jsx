@@ -48,8 +48,8 @@ function UniformsPage() {
     <div className="page page--uniforms">
       <header className="page__header">
         <div>
-          <h1>Đồng phục (Uniform)</h1>
-          <p>Quản lý template đồng phục cho các vùng ATSH.</p>
+          <h1>Đồng phục</h1>
+          <p>Quản lý mẫu đồng phục, gán vùng ATSH và xem trước.</p>
         </div>
         <button type="button" className="btn btn--outline" onClick={loadUniforms}>
           <RefreshCw size={16} />

@@ -67,8 +67,8 @@ export const pageMeta = {
     subtitle: 'Giám sát và xử lý vi phạm an toàn sinh học theo thời gian thực',
   },
   'vi-pham-atsh': {
-    title: 'Trung tâm vi phạm ATSH',
-    subtitle: 'Vi phạm ATSH, sự kiện AI — giám sát và xử lý theo thời gian thực',
+    title: 'Vi phạm ATSH',
+    subtitle: 'Trung tâm quản lý vi phạm — chưa xử lý, đã xử lý và xử lý realtime',
   },
   rules: {
     title: 'Quy tắc ATSH',

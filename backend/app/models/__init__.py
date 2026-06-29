@@ -25,6 +25,8 @@ from app.models.farm_zone import FarmZone
 from app.models.farm_map_object import FarmMapObject
 from app.models.template_zone_definition import TemplateZoneDefinition
 from app.models.license import License
+from app.models.notification_delivery import NotificationDelivery
+from app.models.notification_dispatch import NotificationDispatch
 from app.models.notification_gateway import NotificationGateway
 from app.models.notification_rule import NotificationRule
 from app.models.object_track import ObjectTrack
@@ -68,6 +70,8 @@ __all__ = [
     "FarmZone",
     "TemplateZoneDefinition",
     "License",
+    "NotificationDelivery",
+    "NotificationDispatch",
     "NotificationGateway",
     "NotificationRule",
     "ObjectTrack",

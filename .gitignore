@@ -1,8 +1,12 @@
 node_modules/
 dist/
+.dev/
 .env
 .env.local
+backend/.env
 backups/
+backend/test_venv/
+~$*
 *.log
 .DS_Store
 

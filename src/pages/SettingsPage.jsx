@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Mail, Send, ShieldCheck, SlidersHorizontal, Users } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Activity, CheckCircle2, Mail, MessageCircle, Rocket, ShieldCheck, SlidersHorizontal, Stethoscope, Users, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import CameraFormPanel from '../components/camera/CameraFormPanel'
 import { alertSettings, severityLabels } from '../data/mockData'
@@ -7,6 +7,15 @@ import { getFarms } from '../services/farmService'
 import { getSystemSettings, updateSystemSettings, createSystemBackup } from '../services/systemSettingsService'
 import { fetchDemoStatus, startDemoMode, stopDemoMode } from '../services/demoService'
 import { listUsers } from '../services/userService'
+import {
+  connectGmailNotification,
+  getNotificationSettings,
+  pollZaloConnect,
+  startZaloConnect,
+  testGmailNotification,
+  verifyGmailNotification,
+  updateNotificationSettings,
+} from '../services/notificationSettingsService'
 import {
   EMPTY_CAMERA_FORM,
   buildCameraPayload,
@@ -29,6 +38,12 @@ function SettingsPage() {
   const [systemSettings, setSystemSettings] = useState(null)
   const [demoStatus, setDemoStatus] = useState(null)
   const [managedUsers, setManagedUsers] = useState([])
+  const [notificationSettings, setNotificationSettings] = useState(null)
+  const [notificationStatus, setNotificationStatus] = useState('')
+  const [notificationAction, setNotificationAction] = useState('')
+  const [zaloModalOpen, setZaloModalOpen] = useState(false)
+  const [zaloSession, setZaloSession] = useState(null)
+  const zaloPollRef = useRef(null)
 
   const formInitialValues = useMemo(() => {
     if (formMode === 'edit') return cameraToFormValues(editingCamera)
@@ -42,17 +57,19 @@ function SettingsPage() {
   async function loadData() {
     setLoading(true)
     try {
-      const [cameraData, farmData, settingsData, usersData, demoData] = await Promise.all([
+      const [cameraData, farmData, settingsData, usersData, demoData, notifySettings] = await Promise.all([
         getCameras(),
         getFarms().catch(() => []),
         getSystemSettings().catch(() => null),
         listUsers().catch(() => []),
         fetchDemoStatus().catch(() => null),
+        getNotificationSettings().catch(() => null),
       ])
       setCameras(cameraData)
       setSystemSettings(settingsData)
       setDemoStatus(demoData)
       setManagedUsers(usersData)
+      setNotificationSettings(notifySettings)
       if (farmData.length) {
         setFarms(farmData.map((farm) => ({ id: farm.id, name: farm.name })))
       }
@@ -171,6 +188,128 @@ function SettingsPage() {
     }
   }
 
+  const handleSaveNotificationSettings = async () => {
+    if (!notificationSettings || notificationAction) return
+    setNotificationAction('save')
+    setNotificationStatus('')
+    try {
+      const saved = await updateNotificationSettings({
+        gmail_enabled: notificationSettings.gmail_enabled,
+        zalo_enabled: notificationSettings.zalo_enabled,
+        gmail_recipient: notificationSettings.gmail_recipient,
+      })
+      setNotificationSettings(saved)
+      setNotificationStatus('Đã lưu cấu hình thông báo')
+    } catch (error) {
+      setNotificationStatus(error.message)
+    } finally {
+      setNotificationAction('')
+    }
+  }
+
+  const handleConnectGmail = async () => {
+    if (!notificationSettings || notificationAction) return
+    setNotificationAction('gmail-connect')
+    setNotificationStatus('')
+    try {
+      await connectGmailNotification({
+        gmail_recipient: notificationSettings.gmail_recipient,
+      })
+      const saved = await getNotificationSettings()
+      setNotificationSettings(saved)
+      setNotificationStatus('✓ Đã kết nối Gmail')
+    } catch (error) {
+      setNotificationStatus(error.message)
+    } finally {
+      setNotificationAction('')
+    }
+  }
+
+  const handleGmailVerify = async () => {
+    if (!notificationSettings || notificationAction) return
+    setNotificationAction('gmail-verify')
+    setNotificationStatus('')
+    try {
+      await verifyGmailNotification()
+      setNotificationStatus('✓ Kết nối SMTP Gmail thành công')
+    } catch (error) {
+      setNotificationStatus(error.message)
+    } finally {
+      setNotificationAction('')
+    }
+  }
+
+  const handleGmailTest = async () => {
+    if (!notificationSettings || notificationAction) return
+    setNotificationAction('gmail-test')
+    setNotificationStatus('')
+    try {
+      await testGmailNotification()
+      const saved = await getNotificationSettings()
+      setNotificationSettings(saved)
+      setNotificationStatus('✓ Đã gửi Email thành công')
+    } catch (error) {
+      const saved = await getNotificationSettings().catch(() => null)
+      if (saved) setNotificationSettings(saved)
+      setNotificationStatus(error.message)
+    } finally {
+      setNotificationAction('')
+    }
+  }
+
+  const formatGmailSentAt = (value) => {
+    if (!value) return '—'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return date.toLocaleString('vi-VN')
+  }
+
+  const closeZaloModal = () => {
+    if (zaloPollRef.current) {
+      clearInterval(zaloPollRef.current)
+      zaloPollRef.current = null
+    }
+    setZaloModalOpen(false)
+    setZaloSession(null)
+  }
+
+  const handleStartZaloConnect = async () => {
+    if (notificationAction) return
+    setNotificationAction('zalo-connect')
+    setNotificationStatus('')
+    try {
+      const session = await startZaloConnect()
+      setZaloSession(session)
+      setZaloModalOpen(true)
+
+      if (zaloPollRef.current) clearInterval(zaloPollRef.current)
+      zaloPollRef.current = setInterval(async () => {
+        try {
+          const result = await pollZaloConnect(session.session_id)
+          if (result.connected && result.settings) {
+            setNotificationSettings(result.settings)
+            setNotificationStatus('Zalo: ✓ Đã kết nối')
+            closeZaloModal()
+          } else if (result.status === 'expired') {
+            setNotificationStatus('Phiên quét mã QR đã hết hạn. Vui lòng thử lại.')
+            closeZaloModal()
+          }
+        } catch (error) {
+          setNotificationStatus(error.message)
+          closeZaloModal()
+        }
+      }, 2500)
+    } catch (error) {
+      setNotificationStatus(error.message)
+    } finally {
+      setNotificationAction('')
+    }
+  }
+
+  useEffect(() => () => {
+    if (zaloPollRef.current) clearInterval(zaloPollRef.current)
+  }, [])
+
   const handleCreateBackup = async () => {
     try {
       const backup = await createSystemBackup()
@@ -189,6 +328,38 @@ function SettingsPage() {
 
   return (
     <div className="settings-page">
+      <section className="panel settings-tools-panel">
+        <div className="panel__header">
+          <div>
+            <h2>Công cụ hệ thống</h2>
+            <p>Triển khai, giám sát và chẩn đoán AMS</p>
+          </div>
+        </div>
+        <div className="settings-tools-grid">
+          <Link to="/setup" className="settings-tools-card">
+            <Rocket size={20} />
+            <div>
+              <strong>Hướng dẫn cài đặt</strong>
+              <span>Thiết lập ban đầu cho trang trại</span>
+            </div>
+          </Link>
+          <Link to="/system-status" className="settings-tools-card">
+            <Activity size={20} />
+            <div>
+              <strong>Trạng thái hệ thống</strong>
+              <span>Theo dõi database, Redis, camera</span>
+            </div>
+          </Link>
+          <Link to="/diagnostics" className="settings-tools-card">
+            <Stethoscope size={20} />
+            <div>
+              <strong>Chẩn đoán hệ thống</strong>
+              <span>Kiểm tra sự cố và log vận hành</span>
+            </div>
+          </Link>
+        </div>
+      </section>
+
       <div className="settings-grid">
         <section className="panel">
           <div className="panel__header">
@@ -465,26 +636,171 @@ function SettingsPage() {
         <section className="panel">
           <div className="panel__header">
             <div>
-              <h2 className="panel__title">Kênh nhận cảnh báo</h2>
-              <p className="panel__desc">Email và Telegram nhận cảnh báo AI tức thời</p>
+              <h2 className="panel__title">Thông báo vi phạm ATSH</h2>
+              <p className="panel__desc">Tự động gửi cảnh báo khi Compliance Engine xác nhận vi phạm mới (OPEN)</p>
+              {notificationStatus ? <p className="panel__meta">{notificationStatus}</p> : null}
             </div>
           </div>
-          <div className="settings-form">
-            <label className="settings-form__label">
-              <span><Mail size={15} /> Email nhận cảnh báo</span>
-              <input type="email" className="settings-form__input" defaultValue="ops@ams-farm.vn" />
-            </label>
-            <label className="settings-form__label">
-              <span><Send size={15} /> Telegram nhận cảnh báo</span>
-              <input type="text" className="settings-form__input" defaultValue="@ams_farm_alerts" />
-            </label>
-            <div className="settings-form__actions">
-              <button type="button" className="btn btn--outline">Gửi thử</button>
-              <button type="button" className="btn btn--primary">Lưu cấu hình</button>
+          {notificationSettings ? (
+            <div className="settings-form notification-simple">
+              <p className="notification-simple__intro">
+                Khi Compliance Engine xác nhận vi phạm mới (OPEN), AMS tự động gửi Gmail cảnh báo — không cần thao tác thêm.
+              </p>
+
+              <div className="notification-simple__card">
+                <label className="settings-form__label settings-form__label--inline">
+                  <span><Mail size={15} /> Bật Gmail</span>
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(notificationSettings.gmail_enabled)}
+                      onChange={(event) =>
+                        setNotificationSettings((prev) => ({
+                          ...prev,
+                          gmail_enabled: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="toggle__slider" />
+                  </label>
+                </label>
+
+                <label className="settings-form__label">
+                  <span>Email nhận cảnh báo</span>
+                  <input
+                    type="email"
+                    className="settings-form__input"
+                    placeholder="email-cua-ban@gmail.com"
+                    value={notificationSettings.gmail_recipient || ''}
+                    disabled={Boolean(notificationSettings.gmail_connected)}
+                    onChange={(event) =>
+                      setNotificationSettings((prev) => ({
+                        ...prev,
+                        gmail_recipient: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                {notificationSettings.gmail_connected ? (
+                  <>
+                    <p className="notification-simple__connected">
+                      <CheckCircle2 size={16} /> ✓ Gmail đã kết nối
+                    </p>
+                    <div className="notification-simple__meta">
+                      <p><strong>Email gửi:</strong> {notificationSettings.gmail_sender || '—'}</p>
+                      <p><strong>Email nhận:</strong> {notificationSettings.gmail_recipient || '—'}</p>
+                      <p><strong>Lần gửi cuối:</strong> {formatGmailSentAt(notificationSettings.gmail_last_sent_at)}</p>
+                      <p>
+                        <strong>Trạng thái:</strong>{' '}
+                        {notificationSettings.gmail_last_status === 'success' ? (
+                          <span className="notification-simple__status notification-simple__status--ok">✓ Thành công</span>
+                        ) : notificationSettings.gmail_last_status === 'failed' ? (
+                          <span className="notification-simple__status notification-simple__status--error">Gửi thất bại</span>
+                        ) : (
+                          '—'
+                        )}
+                      </p>
+                      {notificationSettings.gmail_last_error ? (
+                        <p className="notification-simple__error">{notificationSettings.gmail_last_error}</p>
+                      ) : null}
+                    </div>
+                    <div className="notification-simple__actions">
+                      <button
+                        type="button"
+                        className="btn btn--outline"
+                        disabled={Boolean(notificationAction)}
+                        onClick={handleGmailVerify}
+                      >
+                        {notificationAction === 'gmail-verify' ? 'Đang kiểm tra…' : 'Kiểm tra kết nối'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary"
+                        disabled={Boolean(notificationAction)}
+                        onClick={handleGmailTest}
+                      >
+                        {notificationAction === 'gmail-test' ? 'Đang gửi…' : 'Gửi Email thử'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    disabled={Boolean(notificationAction) || !notificationSettings.gmail_recipient}
+                    onClick={handleConnectGmail}
+                  >
+                    {notificationAction === 'gmail-connect' ? 'Đang kết nối…' : 'Kết nối Gmail'}
+                  </button>
+                )}
+              </div>
+
+              <div className="notification-simple__card">
+                <label className="settings-form__label settings-form__label--inline">
+                  <span><MessageCircle size={15} /> Bật Zalo</span>
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(notificationSettings.zalo_enabled)}
+                      onChange={(event) =>
+                        setNotificationSettings((prev) => ({
+                          ...prev,
+                          zalo_enabled: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="toggle__slider" />
+                  </label>
+                </label>
+
+                {notificationSettings.zalo_connected ? (
+                  <p className="notification-simple__connected">
+                    <CheckCircle2 size={16} /> Đã kết nối
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn--outline"
+                    disabled={Boolean(notificationAction)}
+                    onClick={handleStartZaloConnect}
+                  >
+                    {notificationAction === 'zalo-connect' ? 'Đang mở…' : 'Quét mã QR'}
+                  </button>
+                )}
+              </div>
+
+              <div className="settings-form__actions">
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={Boolean(notificationAction)}
+                  onClick={handleSaveNotificationSettings}
+                >
+                  {notificationAction === 'save' ? 'Đang lưu…' : 'Lưu cấu hình'}
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <p className="panel__meta">Không tải được cấu hình thông báo.</p>
+          )}
         </section>
       </div>
+
+      {zaloModalOpen && zaloSession ? (
+        <div className="notification-qr-modal" role="dialog" aria-modal="true">
+          <div className="notification-qr-modal__backdrop" onClick={closeZaloModal} />
+          <div className="notification-qr-modal__panel">
+            <button type="button" className="notification-qr-modal__close" onClick={closeZaloModal} aria-label="Đóng">
+              <X size={18} />
+            </button>
+            <h3>Quét mã QR bằng Zalo</h3>
+            <p>{zaloSession.message}</p>
+            <img src={zaloSession.qr_url} alt="Mã QR quan tâm Zalo OA" className="notification-qr-modal__image" />
+            <p className="notification-qr-modal__hint">Sau khi quan tâm Official Account, AMS sẽ tự nhận kết nối.</p>
+          </div>
+        </div>
+      ) : null}
 
       {formMode === 'create' ? (
         <CameraFormPanel

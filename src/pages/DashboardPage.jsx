@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, ArrowRightLeft, GitBranch, ShieldAlert, Wifi } from 'lucide-react'
+import { ArrowRightLeft, GitBranch, ShieldAlert } from 'lucide-react'
 import {
   Cell,
   Line,
@@ -19,13 +19,12 @@ import {
 } from '../data/mockData'
 
 import { LOGO_SRC } from '../components/BrandLogo'
-import RealtimeDashboardWidgets from '../components/realtime/RealtimeDashboardWidgets'
 import ComplianceKpiWidgets from '../components/dashboard/ComplianceKpiWidgets'
+import BiosecurityCompliancePanel from '../components/dashboard/BiosecurityCompliancePanel'
 import TopViolationsWidget from '../components/dashboard/TopViolationsWidget'
 import CameraHealthWidget from '../components/dashboard/CameraHealthWidget'
-import { useEventStore } from '../context/EventStore'
-import { API_BASE_URL } from '../config/api'
-import { fetchCameraHealthSummary, fetchComplianceKpis, fetchTopViolations } from '../services/reportsService'
+import GmailDeliveryWidget from '../components/dashboard/GmailDeliveryWidget'
+import { useDashboardBootstrap } from '../context/DashboardBootstrapStore'
 
 const COLORS = ['#0B6B1B', '#F36A10', '#dc2626', '#facc15', '#64748b']
 
@@ -53,127 +52,28 @@ function formatCrossTime(value) {
 }
 
 function DashboardPage() {
-  const { metrics } = useEventStore()
-  const [recentCrossings, setRecentCrossings] = useState([])
-  const [workflowCompliance, setWorkflowCompliance] = useState(null)
-  const [workflowDashboard, setWorkflowDashboard] = useState(null)
-  const [atshSummary, setAtshSummary] = useState(null)
-  const [complianceKpis, setComplianceKpis] = useState(null)
-  const [topViolations, setTopViolations] = useState([])
-  const [cameraHealth, setCameraHealth] = useState(null)
-  const [reportLoading, setReportLoading] = useState(true)
-  const stats = [
-    { label: 'Event đang mở', value: metrics.openEvents, icon: ShieldAlert, tone: 'orange' },
-    { label: 'Event nghiêm trọng', value: metrics.criticalEvents, icon: Activity, tone: 'red' },
-    { label: 'Sự kiện hôm nay', value: metrics.totalEventsToday, icon: Activity, tone: 'green' },
-    { label: 'Camera online', value: `${metrics.onlineCameras}/${metrics.totalCameras}`, icon: Wifi, tone: 'green' },
-  ]
+  const { data, loading } = useDashboardBootstrap()
 
-  useEffect(() => {
-    const loadRecentCrossings = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/transitions/recent?limit=8`)
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const data = await response.json()
-        setRecentCrossings(data.items || [])
-      } catch {
-        setRecentCrossings([])
-      }
-    }
-
-    loadRecentCrossings()
-    const timer = setInterval(loadRecentCrossings, 15000)
-
-    const loadWorkflowCompliance = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/workflows/compliance/summary`)
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const data = await response.json()
-        setWorkflowCompliance(data)
-      } catch {
-        setWorkflowCompliance(null)
-      }
-    }
-
-    const loadWorkflowDashboard = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/workflows/dashboard`)
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const data = await response.json()
-        setWorkflowDashboard(data)
-      } catch {
-        setWorkflowDashboard(null)
-      }
-    }
-
-    const loadAtshSummary = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/dashboard/summary`)
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const data = await response.json()
-        setAtshSummary(data)
-      } catch {
-        setAtshSummary(null)
-      }
-    }
-
-    const loadReportWidgets = async () => {
-      try {
-        setReportLoading(true)
-        const [kpis, topItems, health] = await Promise.all([
-          fetchComplianceKpis(),
-          fetchTopViolations(7, 10),
-          fetchCameraHealthSummary(),
-        ])
-        setComplianceKpis(kpis)
-        setTopViolations(topItems.items || [])
-        setCameraHealth(health)
-      } catch {
-        setComplianceKpis(null)
-        setTopViolations([])
-        setCameraHealth(null)
-      } finally {
-        setReportLoading(false)
-      }
-    }
-
-    loadWorkflowCompliance()
-    loadWorkflowDashboard()
-    loadAtshSummary()
-    loadReportWidgets()
-    const workflowTimer = setInterval(() => {
-      loadWorkflowCompliance()
-      loadWorkflowDashboard()
-      loadAtshSummary()
-      loadReportWidgets()
-    }, 15000)
-    return () => {
-      clearInterval(timer)
-      clearInterval(workflowTimer)
-    }
-  }, [])
+  const atshSummary = data?.dashboardSummary ?? null
+  const complianceKpis = data?.complianceSummary?.kpis ?? null
+  const topViolations = data?.complianceSummary?.topViolations?.items ?? []
+  const cameraHealth = data?.cameraSummary?.health ?? null
+  const notificationSummary = data?.notificationSummary ?? null
+  const workflowCompliance = data?.workflowSummary?.compliance ?? null
+  const workflowDashboard = data?.workflowSummary?.dashboard ?? null
+  const recentCrossings = data?.workflowSummary?.recentCrossings?.items ?? []
 
   return (
     <div className="dashboard-page">
       <img src={LOGO_SRC} alt="TIN NGHIA AMS" className="dashboard-page__brand-mark" />
-      <RealtimeDashboardWidgets />
-      <ComplianceKpiWidgets kpis={complianceKpis} loading={reportLoading} />
-      <section className="dashboard-grid dashboard-grid--lists">
-        <TopViolationsWidget items={topViolations} loading={reportLoading} />
-        <CameraHealthWidget summary={cameraHealth} loading={reportLoading} />
+      <ComplianceKpiWidgets kpis={complianceKpis} loading={loading} />
+      <section className="dashboard-grid">
+        <BiosecurityCompliancePanel />
       </section>
-      <section className="stat-grid">
-        {stats.map((stat) => (
-          <article key={stat.label} className={`metric-card metric-card--${stat.tone}`}>
-            <div>
-              <span className="metric-card__label">{stat.label}</span>
-              <strong>{stat.value}</strong>
-            </div>
-            <span className="metric-card__icon">
-              <stat.icon size={24} />
-            </span>
-          </article>
-        ))}
+      <section className="dashboard-grid dashboard-grid--lists">
+        <TopViolationsWidget items={topViolations} loading={loading} />
+        <GmailDeliveryWidget summary={notificationSummary} loading={loading} />
+        <CameraHealthWidget summary={cameraHealth} loading={loading} />
       </section>
 
       <section className="dashboard-grid">
@@ -290,7 +190,7 @@ function DashboardPage() {
                 <span>Tuân thủ quy trình</span>
               </div>
               <div className="workflow-steps">
-                {workflowCompliance.expected_steps.map((step, index) => (
+                {(workflowCompliance.expected_steps || []).map((step, index) => (
                   <span key={step} className="workflow-step-chip">
                     {index + 1}. {step}
                   </span>

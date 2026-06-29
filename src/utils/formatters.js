@@ -1,6 +1,17 @@
 export function formatDateTime(date, time) {
-  const [year, month, day] = date.split('-')
-  return `${time} · ${day}/${month}/${year}`
+  const safeDate = date ? String(date) : ''
+  const safeTime = time ? String(time) : '--:--'
+
+  if (!safeDate.includes('-')) {
+    return safeTime
+  }
+
+  const [year, month, day] = safeDate.split('-')
+  if (!year || !month || !day) {
+    return safeTime
+  }
+
+  return `${safeTime} · ${day}/${month}/${year}`
 }
 
 export function getRiskLabel(risk) {

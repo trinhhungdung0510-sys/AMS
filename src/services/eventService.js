@@ -1,15 +1,21 @@
 import { apiFetch } from './apiClient'
 
-export async function getEvents() {
-  const response = await apiFetch('/events')
+const DEFAULT_EVENT_LIMIT = 100
+
+export async function getEvents({ limit = DEFAULT_EVENT_LIMIT, page = 1 } = {}) {
+  const response = await apiFetch(`/events?limit=${limit}&page=${page}`)
   if (!response.ok) {
     throw new Error('Failed to load events')
   }
-  return response.json()
+  const data = await response.json()
+  if (Array.isArray(data)) {
+    return data
+  }
+  return data.items || []
 }
 
-export async function getEngineEvents() {
-  const response = await apiFetch('/events/engine')
+export async function getEngineEvents(limit = DEFAULT_EVENT_LIMIT) {
+  const response = await apiFetch(`/events/engine?limit=${limit}`)
   if (!response.ok) {
     throw new Error('Không tải được sự kiện rule engine')
   }

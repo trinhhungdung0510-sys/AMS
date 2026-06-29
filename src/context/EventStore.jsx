@@ -4,17 +4,14 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react'
 import { useAuth } from './AuthContext'
-import { getEvents } from '../services/eventService'
-import { apiFetch } from '../services/apiClient'
+import { useDashboardBootstrap } from './DashboardBootstrapStore'
 import { subscribeWsEvents } from '../services/wsClient'
 import {
   computeEventMetrics,
-  mergeEventLists,
-  normalizeApiEvent,
+  normalizeEngineEvent,
   normalizeWsPayload,
   sortEventsByTime,
   upsertEvent,
@@ -30,8 +27,13 @@ function logWs(label, payload) {
   }
 }
 
+function normalizeBootstrapEvents(items = []) {
+  return items.map((event) => normalizeEngineEvent(event)).filter(Boolean)
+}
+
 export function EventStoreProvider({ children }) {
   const { user, loading: authLoading } = useAuth()
+  const { data: bootstrap, loading: bootstrapLoading, error: bootstrapError } = useDashboardBootstrap()
   const [events, setEvents] = useState([])
   const [cameras, setCameras] = useState([])
   const [connected, setConnected] = useState(false)
@@ -39,7 +41,7 @@ export function EventStoreProvider({ children }) {
   const [error, setError] = useState(null)
   const [lastWsEvent, setLastWsEvent] = useState(null)
   const [lastNotification, setLastNotification] = useState(null)
-  const reloadVersionRef = useRef(0)
+  const [lastGmailFailure, setLastGmailFailure] = useState(null)
 
   const applyEvent = useCallback((incoming, { fromWs = false } = {}) => {
     if (!incoming?.id) return
@@ -51,44 +53,16 @@ export function EventStoreProvider({ children }) {
     }
   }, [])
 
-  const reload = useCallback(async () => {
-    const reloadVersion = reloadVersionRef.current + 1
-    reloadVersionRef.current = reloadVersion
-    setLoading(true)
-    setError(null)
-
-    try {
-      const [eventsData, cameraRes] = await Promise.all([
-        getEvents(),
-        apiFetch('/cameras'),
-      ])
-
-      if (!cameraRes.ok) {
-        throw new Error(`Không tải được camera (${cameraRes.status})`)
-      }
-
-      const cameraData = await cameraRes.json()
-      const normalizedEvents = (Array.isArray(eventsData) ? eventsData : []).map(normalizeApiEvent)
-
-      if (reloadVersionRef.current !== reloadVersion) {
-        return
-      }
-
-      setEvents((current) => mergeEventLists(normalizedEvents, current).slice(0, MAX_EVENTS))
-      setCameras(Array.isArray(cameraData) ? cameraData : [])
-    } catch (err) {
-      if (reloadVersionRef.current === reloadVersion) {
-        setError(err instanceof Error ? err.message : 'Không tải được sự kiện')
-      }
-    } finally {
-      if (reloadVersionRef.current === reloadVersion) {
-        setLoading(false)
-      }
-    }
+  const removeEvent = useCallback((eventId) => {
+    if (!eventId) return
+    setEvents((current) => current.filter((item) => item.id !== eventId))
   }, [])
 
   useEffect(() => {
-    if (authLoading) return
+    if (authLoading || bootstrapLoading) {
+      return
+    }
+
     if (!user) {
       setEvents([])
       setCameras([])
@@ -96,10 +70,21 @@ export function EventStoreProvider({ children }) {
       setError(null)
       setLastWsEvent(null)
       setLastNotification(null)
+      setLastGmailFailure(null)
       return
     }
-    reload()
-  }, [authLoading, user, reload])
+
+    if (bootstrap?.recentEvents && bootstrap?.cameraSummary) {
+      setEvents(normalizeBootstrapEvents(bootstrap.recentEvents.items))
+      setCameras(Array.isArray(bootstrap.cameraSummary.cameras) ? bootstrap.cameraSummary.cameras : [])
+      setLoading(false)
+      setError(null)
+      return
+    }
+
+    setLoading(false)
+    setError(bootstrapError || 'Không tải được sự kiện')
+  }, [authLoading, bootstrapLoading, user, bootstrap, bootstrapError])
 
   useEffect(() => {
     if (!user) return undefined
@@ -126,15 +111,33 @@ export function EventStoreProvider({ children }) {
           return
         }
 
+        if (payload?.type === 'event.removed') {
+          const eventId = payload.payload?.event?.id || payload.payload?.id
+          removeEvent(eventId)
+          return
+        }
+
         if (payload?.type === 'notification.created') {
           const notification = payload.payload?.notification ?? payload.payload
           if (notification) {
             setLastNotification(notification)
           }
+          return
+        }
+
+        if (payload?.type === 'notification.gmail_failed') {
+          const alert = payload.payload?.alert ?? payload.payload
+          if (alert) {
+            setLastGmailFailure({
+              message: alert.message || alert.title || 'Gửi Email thất bại',
+              eventId: alert.eventId,
+              sentAt: payload.timestamp,
+            })
+          }
         }
       },
     })
-  }, [user, applyEvent])
+  }, [user, applyEvent, removeEvent])
 
   const metrics = useMemo(
     () => computeEventMetrics(events, cameras),
@@ -152,12 +155,11 @@ export function EventStoreProvider({ children }) {
       connected,
       loading,
       error,
-      reload,
-      applyEvent,
       lastWsEvent,
       lastNotification,
+      lastGmailFailure,
     }),
-    [events, feedEvents, cameras, metrics, connected, loading, error, reload, applyEvent, lastWsEvent, lastNotification],
+    [events, feedEvents, cameras, metrics, connected, loading, error, lastWsEvent, lastNotification, lastGmailFailure],
   )
 
   return (

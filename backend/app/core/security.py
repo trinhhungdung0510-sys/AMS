@@ -3,7 +3,6 @@ import hashlib
 import hmac
 import json
 import logging
-import os
 import time
 import uuid
 from typing import Any, Optional
@@ -49,6 +48,11 @@ def _token_prefix(token: str) -> str:
     return token[:24] if token else "<empty>"
 
 
+def _auth_debug(message: str, *args) -> None:
+    if get_settings().environment == "development":
+        logger.debug(message, *args)
+
+
 def create_access_token(subject: str, role: str) -> tuple[str, int, str]:
     settings = get_settings()
     now = int(time.time())
@@ -68,15 +72,10 @@ def create_access_token(subject: str, role: str) -> tuple[str, int, str]:
     ).digest()
     token = f"{signing_input}.{_b64encode(signature)}"
 
-    logger.warning(
-        "[AUTH DEBUG create_access_token] pid=%s secret_hash=%s algorithm=%s exp=%s now=%s token_prefix=%s sub=%s",
-        os.getpid(),
-        _secret_key_hash(settings.jwt_secret_key),
-        settings.jwt_algorithm,
-        exp,
-        now,
-        _token_prefix(token),
+    _auth_debug(
+        "[AUTH] create_access_token sub=%s exp=%s",
         subject,
+        exp,
     )
 
     return token, exp, jti
@@ -84,26 +83,16 @@ def create_access_token(subject: str, role: str) -> tuple[str, int, str]:
 
 def decode_access_token(token: str) -> Optional[dict[str, Any]]:
     settings = get_settings()
-    secret_hash = _secret_key_hash(settings.jwt_secret_key)
-    token_prefix = _token_prefix(token)
 
-    logger.warning(
-        "[AUTH DEBUG decode_access_token] pid=%s secret_hash=%s algorithm=%s token_prefix=%s token_len=%s",
-        os.getpid(),
-        secret_hash,
-        settings.jwt_algorithm,
-        token_prefix,
+    _auth_debug(
+        "[AUTH] decode_access_token token_len=%s",
         len(token or ""),
     )
 
     try:
         header_part, payload_part, signature_part = token.split(".")
     except ValueError:
-        logger.warning(
-            "[AUTH DEBUG decode_access_token] FAIL reason=malformed token_prefix=%s parts=%s",
-            token_prefix,
-            len(token.split(".")) if token else 0,
-        )
+        _auth_debug("[AUTH] decode_access_token malformed token")
         return None
 
     signing_input = f"{header_part}.{payload_part}"
@@ -114,39 +103,19 @@ def decode_access_token(token: str) -> Optional[dict[str, Any]]:
     ).digest()
 
     if not hmac.compare_digest(_b64encode(expected_signature), signature_part):
-        logger.warning(
-            "[AUTH DEBUG decode_access_token] FAIL reason=signature_mismatch "
-            "line=security.py:87 secret_hash=%s expected_sig_prefix=%s received_sig_prefix=%s",
-            secret_hash,
-            _b64encode(expected_signature)[:12],
-            signature_part[:12],
-        )
+        _auth_debug("[AUTH] decode_access_token signature_mismatch")
         return None
 
     try:
         payload = json.loads(_b64decode(payload_part))
     except (json.JSONDecodeError, ValueError) as exc:
-        logger.warning(
-            "[AUTH DEBUG decode_access_token] FAIL reason=json_decode line=security.py:98 error=%s",
-            exc,
-        )
+        _auth_debug("[AUTH] decode_access_token json_decode error=%s", exc)
         return None
 
     exp_value = int(payload.get("exp", 0))
     now = int(time.time())
     if exp_value < now:
-        logger.warning(
-            "[AUTH DEBUG decode_access_token] FAIL reason=expired line=security.py:107 exp=%s now=%s delta=%s",
-            exp_value,
-            now,
-            now - exp_value,
-        )
+        _auth_debug("[AUTH] decode_access_token expired exp=%s now=%s", exp_value, now)
         return None
 
-    logger.warning(
-        "[AUTH DEBUG decode_access_token] OK sub=%s exp=%s secret_hash=%s",
-        payload.get("sub"),
-        exp_value,
-        secret_hash,
-    )
     return payload

@@ -217,7 +217,17 @@ export function loadDesignerState() {
   try {
     const raw = localStorage.getItem(DESIGNER_STORAGE_KEY)
     if (!raw) return getDefaultDesignerState()
-    return JSON.parse(raw)
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return getDefaultDesignerState()
+    const fallback = getDefaultDesignerState()
+    return {
+      ...fallback,
+      ...parsed,
+      layout: { ...fallback.layout, ...(parsed.layout || {}) },
+      objects: Array.isArray(parsed.objects) ? parsed.objects : fallback.objects,
+      routes: Array.isArray(parsed.routes) ? parsed.routes : fallback.routes,
+      layers: { ...fallback.layers, ...(parsed.layers || {}) },
+    }
   } catch {
     return getDefaultDesignerState()
   }

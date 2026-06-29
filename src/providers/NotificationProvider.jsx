@@ -14,11 +14,14 @@ function buildEventToast(event) {
 }
 
 function buildNotificationToast(notification) {
+  const isViolationAlert = notification.type === 'violation_alert'
   return {
     id: notification.eventId || notification.id || `ntf-${Date.now()}`,
     tone: (notification.severity || 'MEDIUM').toLowerCase(),
-    title: notification.eventType || notification.type || 'Thông báo',
-    message: notification.message || 'Có sự kiện mới từ hệ thống AI',
+    title: notification.title || (isViolationAlert ? '🚨 CẢNH BÁO VI PHẠM AN TOÀN SINH HỌC' : notification.eventType || notification.type || 'Thông báo'),
+    message: isViolationAlert
+      ? `${notification.zoneName || 'Khu vực'} · ${notification.cameraName || 'Camera'} · ${notification.ruleName || 'Vi phạm ATSH'}`
+      : (notification.message || 'Có sự kiện mới từ hệ thống AI'),
   }
 }
 
@@ -37,29 +40,34 @@ export function NotificationProvider({ children }) {
     }, TOAST_TTL_MS)
   }, [])
 
-  const notify = useCallback((payload) => {
-    console.info('[AMS Notification]', payload)
-  }, [])
+  const showViolationAlert = useCallback((notification, { force = false } = {}) => {
+    if (!notification) return
+    const toast = buildNotificationToast(notification)
+    if (force) {
+      toast.id = `${toast.id}-${Date.now()}`
+    }
+    pushToast(toast)
+  }, [pushToast])
 
   useEffect(() => {
     if (!lastWsEvent?.id) return
+    const statusKey = String(lastWsEvent.statusRaw || lastWsEvent.status || '').toUpperCase()
+    if (statusKey === 'RESOLVED' || statusKey === 'DISMISSED') return
     const toast = buildEventToast(lastWsEvent)
     pushToast(toast)
-    notify({ type: 'event_created', ...lastWsEvent, message: toast.message })
-  }, [lastWsEvent, notify, pushToast])
+  }, [lastWsEvent, pushToast])
 
   useEffect(() => {
     if (!lastNotification) return
     const toast = buildNotificationToast(lastNotification)
     pushToast(toast)
-    notify({ type: 'notification_created', ...lastNotification })
-  }, [lastNotification, notify, pushToast])
+  }, [lastNotification, pushToast])
 
   const dismissToast = useCallback((id) => {
     setToasts((current) => current.filter((item) => item.id !== id))
   }, [])
 
-  const value = useMemo(() => ({ notify }), [notify])
+  const value = useMemo(() => ({ showViolationAlert }), [showViolationAlert])
 
   return (
     <NotificationContext.Provider value={value}>
@@ -89,19 +97,6 @@ export function useNotifications() {
   return context
 }
 
-export function notifyEventCreated(event) {
-  const payload = {
-    type: 'event_created',
-    eventId: event.id,
-    cameraId: event.camera_id,
-    zoneId: event.zone_id,
-    ruleId: event.rule_id,
-    eventType: event.event_type,
-    severity: event.severity,
-    status: event.status,
-    confidence: event.confidence,
-    message: `[${event.severity}] ${event.event_type} — ${event.zone_name || event.zone_id}`,
-  }
-
-  console.info('[AMS Notification] Event created', payload)
+export function notifyEventCreated(_event) {
+  // Realtime notifications are delivered through WebSocket (event.created / notification.created).
 }

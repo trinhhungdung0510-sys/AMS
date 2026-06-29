@@ -1,3 +1,4 @@
+# AMS Docker stack — sau khi up, chạy frontend: npm run dev:up (hoặc bash scripts/up.sh)
 services:
   postgres:
     image: postgres:16-alpine
@@ -15,6 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ams-net
 
   redis:
     image: redis:7-alpine
@@ -28,13 +31,39 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ams-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ams-backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://ams:ams_password@postgres:5432/ams
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - backend_uploads:/app/uploads
+      - backend_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ams-net
 
   ams-vision:
     build:
       context: ../ams-vision
     container_name: ams-vision
     environment:
-      BACKEND_BASE_URL: http://host.docker.internal:8000
+      BACKEND_BASE_URL: http://backend:8000
       CAMERA_ID: CAM-001
       MOCK_DETECTION: "true"
       MOCK_DETECTION_INTERVAL: "30"
@@ -44,10 +73,19 @@ services:
       - "8010:8010"
     volumes:
       - vision_snapshots:/app/snapshots
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ams-net
+
+networks:
+  ams-net:
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
   vision_snapshots:
+  backend_uploads:
+  backend_storage:

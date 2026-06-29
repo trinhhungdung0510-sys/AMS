@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.data.biosecurity_ai_v40 import (
@@ -176,37 +176,48 @@ def create_atsh_violation_event(
 
 
 def get_atsh_violation_summary(db: Session) -> dict:
-    events = list(
-        db.scalars(select(Event).where(Event.category == ATSH_EVENT_CATEGORY))
-    )
     from datetime import datetime, timezone
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    counts = {"INFO": 0, "WARNING": 0, "CRITICAL": 0, "total": 0, "hom_nay": 0}
-    by_rule: dict[str, int] = {}
+    category_filter = Event.category == ATSH_EVENT_CATEGORY
 
-    for event in events:
-        severity = normalize_atsh_severity(event.severity)
-        counts[severity] = counts.get(severity, 0) + 1
-        counts["total"] += 1
-        if event.occurred_at.startswith(today):
-            counts["hom_nay"] += 1
-        code = event.violation_code or event.alert_type
-        by_rule[code] = by_rule.get(code, 0) + 1
+    total = db.scalar(select(func.count()).select_from(Event).where(category_filter)) or 0
+    hom_nay = db.scalar(
+        select(func.count())
+        .select_from(Event)
+        .where(category_filter, Event.occurred_at.startswith(today))
+    ) or 0
 
-    top_rules = sorted(
-        ({"ma_quy_tac": code, "so_vi_pham": total} for code, total in by_rule.items()),
-        key=lambda item: item["so_vi_pham"],
-        reverse=True,
-    )[:5]
+    severity_counts = {"INFO": 0, "WARNING": 0, "CRITICAL": 0}
+    severity_rows = db.execute(
+        select(Event.severity, func.count())
+        .where(category_filter)
+        .group_by(Event.severity)
+    ).all()
+    for severity, count in severity_rows:
+        normalized = normalize_atsh_severity(severity or "")
+        severity_counts[normalized] = severity_counts.get(normalized, 0) + int(count)
+
+    rule_key = func.coalesce(Event.violation_code, Event.alert_type)
+    rule_rows = db.execute(
+        select(rule_key, func.count())
+        .where(category_filter)
+        .group_by(rule_key)
+        .order_by(func.count().desc())
+        .limit(5)
+    ).all()
+    top_rules = [
+        {"ma_quy_tac": code or "UNKNOWN", "so_vi_pham": int(count)}
+        for code, count in rule_rows
+    ]
 
     return {
-        "tong_vi_pham_atsh": counts["total"],
-        "vi_pham_hom_nay": counts["hom_nay"],
+        "tong_vi_pham_atsh": int(total),
+        "vi_pham_hom_nay": int(hom_nay),
         "theo_muc_do": {
-            "INFO": counts.get("INFO", 0),
-            "WARNING": counts.get("WARNING", 0),
-            "CRITICAL": counts.get("CRITICAL", 0),
+            "INFO": severity_counts.get("INFO", 0),
+            "WARNING": severity_counts.get("WARNING", 0),
+            "CRITICAL": severity_counts.get("CRITICAL", 0),
         },
         "top_quy_tac": top_rules,
     }

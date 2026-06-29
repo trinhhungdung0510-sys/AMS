@@ -15,20 +15,6 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    import logging
-    import os
-
-    from app.core.config import get_settings
-
-    settings = get_settings()
-    logging.getLogger("ams.auth.debug").warning(
-        "[AUTH DEBUG get_current_user] pid=%s secret_hash=%s credentials_prefix=%s credentials_len=%s",
-        os.getpid(),
-        __import__("hashlib").sha256(settings.jwt_secret_key.encode()).hexdigest()[:12],
-        (credentials.credentials or "")[:24],
-        len(credentials.credentials or ""),
-    )
-
     payload = decode_access_token(credentials.credentials)
     if not payload:
         raise HTTPException(
@@ -38,15 +24,16 @@ def get_current_user(
 
     jti = payload.get("jti")
     if jti:
-        redis_client = get_redis_client()
         try:
-            if redis_client.get(f"jwt:blacklist:{jti}"):
+            if get_redis_client().get(f"jwt:blacklist:{jti}"):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token has been revoked",
                 )
-        finally:
-            redis_client.close()
+        except HTTPException:
+            raise
+        except Exception:
+            pass
 
     user = db.scalar(select(User).where(User.id == payload.get("sub"), User.is_active.is_(True)))
     if not user:

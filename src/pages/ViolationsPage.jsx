@@ -1,91 +1,109 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
   Download,
   FileText,
-  Filter,
   ShieldAlert,
-  Siren,
 } from 'lucide-react'
-import AtshViolationSnapshot from '../components/AtshViolationSnapshot'
-import EventsListPanel from '../components/EventsListPanel'
+import ErrorBoundary from '../components/common/ErrorBoundary'
+import OpenViolationsPanel from '../components/violations/OpenViolationsPanel'
+import ProcessedViolationsPanel from '../components/violations/ProcessedViolationsPanel'
+import { useViolationProcessing } from '../context/ViolationProcessingContext'
 import {
   ATSH_SEVERITY,
   ATSH_STATUS,
-  ATSH_VIOLATION_TYPES,
   TODAY,
-  VI_PHAM_ATSH_ROUTE,
   atshViolations,
-  cameraOptions,
-  computeAtshKpis,
-  dateFilterOptions,
   mapApiEventToViolation,
-  severityFilterOptions,
-  zoneOptions,
 } from '../data/atshViolations'
 import { exportRowsAsExcel, formatDateTime } from '../utils/formatters'
 import { getEvents } from '../services/eventService'
+import { mapSourceStatusKey } from '../utils/violationStatus'
 
 function ViolationsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const activeTab = searchParams.get('tab') === 'su-kien' ? 'su-kien' : 'vi-pham'
+  const {
+    openViolation,
+    isViolationOpen,
+    getOverride,
+    openMetrics,
+    resolvedRecords,
+  } = useViolationProcessing()
 
+  const activeTab = searchParams.get('tab') === 'da-xu-ly' ? 'da-xu-ly' : 'chua-xu-ly'
   const [items, setItems] = useState(atshViolations)
-  const [dateFilter, setDateFilter] = useState('today')
-  const [cameraFilter, setCameraFilter] = useState('all')
-  const [zoneFilter, setZoneFilter] = useState('all')
-  const [severityFilter, setSeverityFilter] = useState('all')
-  const [typeFilter, setTypeFilter] = useState('all')
+  const [loadError, setLoadError] = useState(null)
 
   useEffect(() => {
     const loadEvents = async () => {
       try {
+        setLoadError(null)
         const data = await getEvents()
-        if (!data.length) return
-        const mapped = data.map(mapApiEventToViolation)
+        if (!Array.isArray(data) || data.length === 0) return
+
+        const mapped = data
+          .map((event) => {
+            try {
+              return mapApiEventToViolation(event)
+            } catch {
+              return null
+            }
+          })
+          .filter(Boolean)
+
+        if (!mapped.length) return
+
         setItems((prev) => {
           const ids = new Set(mapped.map((item) => item.id))
           const rest = prev.filter((item) => !ids.has(item.id))
           return [...mapped, ...rest]
         })
       } catch {
-        // keep mock data
+        setLoadError('Không tải được dữ liệu từ API. Đang hiển thị dữ liệu cục bộ.')
       }
     }
+
     loadEvents()
   }, [])
 
-  const filtered = useMemo(() => items.filter((item) => {
-    const matchDate =
-      dateFilter === 'all' ||
-      (dateFilter === 'today' && item.date === TODAY) ||
-      (dateFilter === 'week' && Number(item.date.slice(-2)) >= 12) ||
-      (dateFilter === 'month' && item.date.startsWith('2026-06'))
+  const openMockItems = useMemo(
+    () => (Array.isArray(items) ? items : []).filter((item) => isViolationOpen(item)),
+    [items, isViolationOpen],
+  )
 
-    const matchCamera = cameraFilter === 'all' || item.cameraId === cameraFilter
-    const matchZone = zoneFilter === 'all' || item.zone === zoneFilter
-    const matchSeverity = severityFilter === 'all' || item.severity === severityFilter
-    const matchType = typeFilter === 'all' || item.type === typeFilter
+  const metrics = openMetrics || {}
 
-    return matchDate && matchCamera && matchZone && matchSeverity && matchType
-  }), [items, dateFilter, cameraFilter, zoneFilter, severityFilter, typeFilter])
+  const kpis = useMemo(() => {
+    const todayOpen =
+      openMockItems.filter((item) => item?.date === TODAY).length + (metrics.openToday ?? 0)
 
-  const kpis = useMemo(() => computeAtshKpis(items), [items])
+    return {
+      totalToday: todayOpen,
+      critical:
+        openMockItems.filter((item) => item?.severity === 'CRITICAL').length + (metrics.openCritical ?? 0),
+      processing: openMockItems.filter(
+        (item) => mapSourceStatusKey(item, getOverride?.(item?.id)) === 'confirmed',
+      ).length,
+      resolved:
+        (Array.isArray(resolvedRecords) ? resolvedRecords.length : 0)
+        + (Array.isArray(items) ? items.filter((item) => item?.status === 'resolved').length : 0),
+    }
+  }, [openMockItems, metrics.openToday, metrics.openCritical, resolvedRecords, items, getOverride])
 
   const exportExcel = () => {
     exportRowsAsExcel(
       'ams-vi-pham-atsh.xls',
-      filtered.map((item) => ({
-        'Thời gian': formatDateTime(item.date, item.time),
-        Camera: item.cameraName,
-        'Khu vực': item.zone,
-        'Loại vi phạm': item.typeLabel,
-        'Độ tin cậy': `${item.confidence}%`,
-        'Mức độ': ATSH_SEVERITY[item.severity]?.label || item.severity,
-        'Trạng thái': ATSH_STATUS[item.status],
+      openMockItems.map((item) => ({
+        'Thời gian': formatDateTime(item?.date, item?.time),
+        Camera: item?.cameraName || 'Chưa có dữ liệu',
+        'Khu vực': item?.zone || item?.zoneName || 'Chưa có dữ liệu',
+        'Loại vi phạm': item?.typeLabel || 'Vi phạm ATSH',
+        'Độ tin cậy': `${item?.confidence ?? 0}%`,
+        'Mức độ': ATSH_SEVERITY[item?.severity]?.label || item?.severity || 'Chưa có dữ liệu',
+        'Trạng thái': ATSH_STATUS[mapSourceStatusKey(item, getOverride?.(item?.id))] || 'Chưa xử lý',
       })),
     )
   }
@@ -96,11 +114,11 @@ function ViolationsPage() {
     <div className="atsh-soc">
       <header className="atsh-soc__hero">
         <div>
-          <span className="atsh-soc__eyebrow">Trung tâm điều hành ATSH</span>
-          <h1>Trung tâm vi phạm ATSH</h1>
-          <p>Giám sát, phân loại và xử lý vi phạm an toàn sinh học theo thời gian thực.</p>
+          <span className="atsh-soc__eyebrow">Trung tâm quản lý vi phạm</span>
+          <h1>Vi phạm ATSH</h1>
+          <p>Một trung tâm duy nhất — theo dõi realtime, xử lý và tra cứu lịch sử vi phạm an toàn sinh học.</p>
         </div>
-        {activeTab === 'vi-pham' && (
+        {activeTab === 'chua-xu-ly' && (
           <div className="atsh-soc__hero-actions">
             <button type="button" className="btn btn--outline atsh-soc__btn" onClick={exportExcel}>
               <Download size={16} /> Excel
@@ -115,37 +133,37 @@ function ViolationsPage() {
       <nav className="atsh-soc__tabs">
         <button
           type="button"
-          className={`atsh-soc__tab${activeTab === 'vi-pham' ? ' atsh-soc__tab--active' : ''}`}
+          className={`atsh-soc__tab${activeTab === 'chua-xu-ly' ? ' atsh-soc__tab--active' : ''}`}
           onClick={() => setSearchParams({})}
         >
-          <ShieldAlert size={16} /> Vi phạm ATSH
+          <ShieldAlert size={16} /> Vi phạm chưa xử lý
         </button>
         <button
           type="button"
-          className={`atsh-soc__tab${activeTab === 'su-kien' ? ' atsh-soc__tab--active' : ''}`}
-          onClick={() => setSearchParams({ tab: 'su-kien' })}
+          className={`atsh-soc__tab${activeTab === 'da-xu-ly' ? ' atsh-soc__tab--active' : ''}`}
+          onClick={() => setSearchParams({ tab: 'da-xu-ly' })}
         >
-          <Siren size={16} /> Sự kiện
+          <CheckCircle2 size={16} /> Vi phạm đã xử lý
         </button>
       </nav>
 
-      {activeTab === 'su-kien' ? (
-        <EventsListPanel />
-      ) : (
-        <>
+      {loadError ? (
+        <p className="atsh-soc__notice panel" role="status">{loadError}</p>
+      ) : null}
+
       <section className="atsh-soc__kpis">
         {[
-          { label: 'Tổng vi phạm hôm nay', value: kpis.totalToday, icon: ShieldAlert, tone: 'green' },
+          { label: 'Vi phạm chưa xử lý hôm nay', value: kpis.totalToday, icon: ShieldAlert, tone: 'green' },
           { label: 'Vi phạm nghiêm trọng', value: kpis.critical, icon: AlertTriangle, tone: 'red' },
-          { label: 'Vi phạm đang xử lý', value: kpis.processing, icon: Clock3, tone: 'orange' },
-          { label: 'Vi phạm đã xử lý', value: kpis.resolved, icon: CheckCircle2, tone: 'blue' },
+          { label: 'Đang xử lý', value: kpis.processing, icon: Clock3, tone: 'orange' },
+          { label: 'Đã xử lý', value: kpis.resolved, icon: CheckCircle2, tone: 'blue' },
         ].map((item) => {
           const Icon = item.icon
           return (
             <article key={item.label} className={`atsh-kpi atsh-kpi--${item.tone}`}>
               <div>
                 <span>{item.label}</span>
-                <strong>{item.value}</strong>
+                <strong>{item.value ?? 0}</strong>
               </div>
               <div className="atsh-kpi__icon">
                 <Icon size={22} />
@@ -155,108 +173,23 @@ function ViolationsPage() {
         })}
       </section>
 
-      <section className="atsh-soc__filters panel">
-        <div className="atsh-soc__filters-head">
-          <Filter size={16} />
-          <strong>Bộ lọc</strong>
-          <span>{filtered.length} vi phạm</span>
-        </div>
-        <div className="atsh-soc__filters-grid">
-          <label>
-            <span>Ngày</span>
-            <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
-              {dateFilterOptions.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Camera</span>
-            <select value={cameraFilter} onChange={(e) => setCameraFilter(e.target.value)}>
-              <option value="all">Tất cả camera</option>
-              {cameraOptions.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Khu vực</span>
-            <select value={zoneFilter} onChange={(e) => setZoneFilter(e.target.value)}>
-              <option value="all">Tất cả khu vực</option>
-              {zoneOptions.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Mức độ</span>
-            <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
-              {severityFilterOptions.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="atsh-soc__filter-wide">
-            <span>Loại vi phạm</span>
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-              <option value="all">Tất cả loại vi phạm</option>
-              {ATSH_VIOLATION_TYPES.map((item) => (
-                <option key={item.code} value={item.code}>{item.label}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <section className="atsh-soc__types panel">
-        <h2>Loại vi phạm</h2>
-        <div className="atsh-type-chips">
-          {ATSH_VIOLATION_TYPES.map((item) => (
-            <button
-              key={item.code}
-              type="button"
-              className={`atsh-type-chip${typeFilter === item.code ? ' atsh-type-chip--active' : ''}`}
-              onClick={() => setTypeFilter(typeFilter === item.code ? 'all' : item.code)}
-            >
-              <span className={`atsh-type-chip__dot atsh-type-chip__dot--${item.severity.toLowerCase()}`} />
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {filtered.length === 0 ? (
-        <div className="atsh-soc__empty panel">
-          <CheckCircle2 size={32} />
-          <p>Không có vi phạm phù hợp bộ lọc.</p>
-        </div>
-      ) : (
-        <section className="atsh-soc__grid">
-          {filtered.map((item) => {
-            const severity = ATSH_SEVERITY[item.severity] || ATSH_SEVERITY.WARNING
-            return (
-              <Link key={item.id} to={`${VI_PHAM_ATSH_ROUTE}/${item.id}`} className="atsh-card">
-                <AtshViolationSnapshot violation={item} />
-                <div className="atsh-card__body">
-                  <div className="atsh-card__head">
-                    <span className={`atsh-severity atsh-severity--${severity.tone}`}>{severity.label}</span>
-                    <span className="atsh-card__time">{formatDateTime(item.date, item.time)}</span>
-                  </div>
-                  <h3>{item.typeLabel}</h3>
-                  <p>{item.cameraName}</p>
-                  <p>{item.zone}</p>
-                  <div className="atsh-card__meta">
-                    <span>Độ tin cậy {item.confidence}%</span>
-                    <span className={`atsh-status atsh-status--${item.status}`}>{ATSH_STATUS[item.status]}</span>
-                  </div>
-                </div>
-              </Link>
-            )
-          })}
-        </section>
-      )}
-        </>
-      )}
+      <ErrorBoundary
+        fallbackTitle={
+          activeTab === 'da-xu-ly'
+            ? 'Không thể hiển thị tab Vi phạm đã xử lý'
+            : 'Không thể hiển thị tab Vi phạm chưa xử lý'
+        }
+      >
+        {activeTab === 'da-xu-ly' ? (
+          <ProcessedViolationsPanel mockItems={items} />
+        ) : (
+          <OpenViolationsPanel
+            items={openMockItems}
+            onOpenViolation={openViolation}
+            getOverride={getOverride}
+          />
+        )}
+      </ErrorBoundary>
     </div>
   )
 }

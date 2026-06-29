@@ -5,6 +5,10 @@ function resolveApiBaseUrl() {
     return fromEnv
   }
 
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    return window.location.origin
+  }
+
   if (typeof window !== 'undefined') {
     const { hostname } = window.location
 
@@ -23,6 +27,11 @@ function resolveApiBaseUrl() {
 export const API_BASE_URL = resolveApiBaseUrl()
 
 export function getWebSocketBaseUrl() {
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}`
+  }
+
   if (API_BASE_URL.startsWith('https://')) {
     return API_BASE_URL.replace('https://', 'wss://')
   }

@@ -6,12 +6,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_at: int
-
-
 class UserMeResponse(BaseModel):
     id: str
     email: str
@@ -19,6 +13,13 @@ class UserMeResponse(BaseModel):
     role: str
     farm_id: str
     is_active: bool
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_at: int
+    user: UserMeResponse | None = None
 
 
 class LogoutResponse(BaseModel):

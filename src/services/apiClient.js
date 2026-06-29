@@ -14,5 +14,14 @@ export async function apiFetch(path, options = {}) {
   }
 
   const url = path.startsWith('http') ? path : `${API_BASE_URL}/api${path}`
-  return fetch(url, { ...options, headers })
+
+  try {
+    return await fetch(url, { ...options, headers })
+  } catch (error) {
+    const message = error?.message || 'Network error'
+    if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+      throw new Error(`Không kết nối được Backend (${url}). Kiểm tra AMS Backend đang chạy.`)
+    }
+    throw error
+  }
 }

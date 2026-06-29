@@ -16,6 +16,63 @@ from app.models import Camera, Event, Farm, FarmZone
 from app.events.event_catalog import enrich_event_fields
 
 
+class LocalizationCache:
+    def __init__(self, db: Session):
+        self._db = db
+        self._zones: dict[str, str] = {}
+        self._cameras: dict[str, str] = {}
+        self._farms: dict[str, str] = {}
+
+    def preload_for_events(self, events: list[Event]) -> None:
+        zone_codes = {event.zone for event in events if event.zone}
+        camera_ids = {event.camera_id for event in events if event.camera_id}
+        farm_ids = {event.farm_id for event in events if event.farm_id}
+
+        if zone_codes:
+            rows = self._db.scalars(
+                select(FarmZone).where(FarmZone.zone_code.in_(tuple(zone_codes)))
+            )
+            for row in rows:
+                self._zones[row.zone_code] = row.name
+
+        if camera_ids:
+            rows = self._db.scalars(select(Camera).where(Camera.id.in_(tuple(camera_ids))))
+            for row in rows:
+                self._cameras[row.id] = row.name
+
+        if farm_ids:
+            rows = self._db.scalars(select(Farm).where(Farm.id.in_(tuple(farm_ids))))
+            for row in rows:
+                self._farms[row.id] = row.name
+
+    def zone_name(self, zone_code: str) -> str:
+        if not zone_code:
+            return "Không xác định"
+        if zone_code in self._zones:
+            return self._zones[zone_code]
+        name = resolve_zone_name(self._db, zone_code)
+        self._zones[zone_code] = name
+        return name
+
+    def camera_name(self, camera_id: str) -> str:
+        if not camera_id:
+            return camera_id
+        if camera_id in self._cameras:
+            return self._cameras[camera_id]
+        name = resolve_camera_name(self._db, camera_id)
+        self._cameras[camera_id] = name
+        return name
+
+    def farm_name(self, farm_id: str) -> str:
+        if not farm_id:
+            return farm_id
+        if farm_id in self._farms:
+            return self._farms[farm_id]
+        name = resolve_farm_name(self._db, farm_id)
+        self._farms[farm_id] = name
+        return name
+
+
 def resolve_zone_name(db: Session, zone_code: str) -> str:
     if not zone_code:
         return "Không xác định"
@@ -57,13 +114,13 @@ def resolve_camera_name(db: Session, camera_id: str) -> str:
     return camera.name if camera else camera_id
 
 
-def event_to_vi_dict(db: Session, event: Event) -> dict:
+def event_to_vi_dict(db: Session, event: Event, cache: LocalizationCache | None = None) -> dict:
     metadata = event.event_metadata or {}
     score = event.confidence_score
     if score is None and event.confidence is not None:
         score = round(event.confidence / 100, 2)
 
-    zone_name = resolve_zone_name(db, event.zone)
+    zone_name = cache.zone_name(event.zone) if cache else resolve_zone_name(db, event.zone)
     rule_name = metadata.get("rule_name") or event.alert_type
     enriched = enrich_event_fields(
         event_type=event.event_type or event.alert_type,
@@ -78,8 +135,8 @@ def event_to_vi_dict(db: Session, event: Event) -> dict:
         "ten_vi_pham": enriched["title"],
         "muc_do": resolve_severity_label(enriched["severity"]),
         "ten_vung": zone_name,
-        "ten_camera": resolve_camera_name(db, event.camera_id),
-        "ten_trang_trai": resolve_farm_name(db, event.farm_id),
+        "ten_camera": cache.camera_name(event.camera_id) if cache else resolve_camera_name(db, event.camera_id),
+        "ten_trang_trai": cache.farm_name(event.farm_id) if cache else resolve_farm_name(db, event.farm_id),
         "do_tin_cay": event.confidence,
         "thoi_gian": event.occurred_at,
         "trang_thai": resolve_status_label(event.status),
@@ -98,6 +155,14 @@ def event_to_vi_dict(db: Session, event: Event) -> dict:
         "snapshot_path": event.snapshot_url,
         "score": score,
     }
+
+
+def events_to_vi_dicts(db: Session, events: list[Event]) -> list[dict]:
+    if not events:
+        return []
+    cache = LocalizationCache(db)
+    cache.preload_for_events(events)
+    return [event_to_vi_dict(db, event, cache=cache) for event in events]
 
 
 def build_email_alert(

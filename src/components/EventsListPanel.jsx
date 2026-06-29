@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Download, Search } from 'lucide-react'
 import { useEventStore } from '../context/EventStore'
+import { useViolationProcessing } from '../context/ViolationProcessingContext'
 import { severityLabels, statusLabels } from '../data/mockData'
 import { exportRowsAsExcel, formatDateTime } from '../utils/formatters'
 
@@ -8,6 +9,7 @@ const pageSize = 10
 
 function EventsListPanel() {
   const { events, loading, error, reload } = useEventStore()
+  const { openViolation } = useViolationProcessing()
   const [search, setSearch] = useState('')
   const [timeFilter, setTimeFilter] = useState('all')
   const [page, setPage] = useState(1)
@@ -124,7 +126,7 @@ function EventsListPanel() {
               </thead>
               <tbody>
                 {rows.map((event) => (
-                  <tr key={event.id}>
+                  <tr key={event.id} className="data-table__row--clickable" onClick={() => openViolation(event)}>
                     <td className="data-table__time">{formatDateTime(event.date, event.time)}</td>
                     <td className="data-table__desc">{event.typeLabel}</td>
                     <td>{event.cameraName}</td>

@@ -1,41 +1,22 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import {
-  getCurrentUser,
-  getToken,
-  logout as authLogout,
-} from '../services/authService'
+import { getToken, logout as authLogout } from '../services/authService'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => Boolean(getToken()))
 
   useEffect(() => {
-    async function loadUser() {
-      const token = getToken()
-
-      if (!token) {
-        setLoading(false)
-        return
-      }
-
-      try {
-        const profile = await getCurrentUser()
-        setUser(profile)
-      } catch {
-        authLogout()
-      } finally {
-        setLoading(false)
-      }
+    if (!getToken()) {
+      setLoading(false)
     }
-
-    loadUser()
   }, [])
 
   function logout() {
     authLogout()
     setUser(null)
+    setLoading(false)
   }
 
   return (
@@ -45,6 +26,7 @@ export function AuthProvider({ children }) {
         setUser,
         logout,
         loading,
+        setLoading,
       }}
     >
       {children}

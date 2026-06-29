@@ -18,19 +18,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    import logging
-    import os
-
-    from app.core.config import get_settings
-
-    settings = get_settings()
-    logging.getLogger("ams.auth.debug").warning(
-        "[AUTH DEBUG login] pid=%s secret_hash=%s jwt_secret_key_len=%s",
-        os.getpid(),
-        __import__("hashlib").sha256(settings.jwt_secret_key.encode()).hexdigest()[:12],
-        len(settings.jwt_secret_key),
-    )
-
     user = db.scalar(select(User).where(User.email == payload.email, User.is_active.is_(True)))
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -49,7 +36,18 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         metadata={"email": user.email},
     )
     db.commit()
-    return TokenResponse(access_token=token, expires_at=expires_at)
+    return TokenResponse(
+        access_token=token,
+        expires_at=expires_at,
+        user=UserMeResponse(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            role=normalize_role(user.role),
+            farm_id=user.farm_id,
+            is_active=user.is_active,
+        ),
+    )
 
 
 @router.post("/logout", response_model=LogoutResponse)
@@ -65,10 +63,7 @@ def logout(
         ttl = max(1, expires_at - int(time.time()))
 
         redis_client = get_redis_client()
-        try:
-            redis_client.setex(f"jwt:blacklist:{jti}", ttl, current_user.id)
-        finally:
-            redis_client.close()
+        redis_client.setex(f"jwt:blacklist:{jti}", ttl, current_user.id)
 
         db.merge(TokenBlacklist(jti=jti, user_id=current_user.id, expires_at=expires_at))
         write_audit_log(

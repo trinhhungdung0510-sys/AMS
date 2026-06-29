@@ -26,6 +26,7 @@ async def websocket_events(websocket: WebSocket) -> None:
                     "rule.evaluated",
                     "event.created",
                     "event.updated",
+                    "event.removed",
                     "notification.created",
                     "camera.status",
                 ],
