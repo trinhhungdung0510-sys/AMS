@@ -7,6 +7,7 @@ import {
   ListChecks,
   Monitor,
   Settings,
+  Shapes,
   ShieldAlert,
   Shirt,
 } from 'lucide-react'
@@ -25,6 +26,14 @@ const menuGroups = [
         label: 'Bảng điều khiển',
         icon: Gauge,
         activePaths: ['/bang-dieu-khien', '/dashboard'],
+        children: [
+          {
+            to: '/thiet-ke-vung-atsh',
+            label: 'Thiết kế vùng ATSH',
+            icon: Shapes,
+            activePaths: ['/thiet-ke-vung-atsh', '/settings/zones'],
+          },
+        ],
       },
     ],
   },
@@ -168,7 +177,7 @@ function Sidebar() {
                       <div className={`sidebar__tree-row${expanded ? ' sidebar__tree-row--expanded' : ''}`}>
                         <NavLink
                           to={item.to}
-                          end={item.to === '/monitoring' || item.to === '/quy-tac-atsh'}
+                          end={item.to === '/monitoring' || item.to === '/quy-tac-atsh' || item.to === '/bang-dieu-khien'}
                           className={`sidebar__item${parentActive ? ' sidebar__item--active' : ''}`}
                         >
                           <span className="sidebar__icon">

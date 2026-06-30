@@ -1,6 +1,6 @@
 import { CheckCircle2, Download, Eye } from 'lucide-react'
 
-function ViolationCard({ image, onResolve }) {
+function ViolationCard({ image, onResolve, onViewLarge, onDownload }) {
   return (
     <article className="violation-card">
       <div className={`violation-card__snapshot violation-card__snapshot--${image.type}`}>
@@ -14,11 +14,19 @@ function ViolationCard({ image, onResolve }) {
         <p>{image.cameraName}</p>
         <span>{image.time}</span>
         <div className="violation-card__actions">
-          <button type="button" className="btn btn--ghost">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => onViewLarge?.(image)}
+          >
             <Eye size={15} />
             Xem lớn
           </button>
-          <button type="button" className="btn btn--ghost">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => onDownload?.(image)}
+          >
             <Download size={15} />
             Tải ảnh
           </button>

@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { ArrowRightLeft, GitBranch, ShieldAlert } from 'lucide-react'
 import {
   Cell,
@@ -17,14 +16,17 @@ import {
   getTopCameras,
   getTopZones,
 } from '../data/mockData'
-
-import { LOGO_SRC } from '../components/BrandLogo'
 import ComplianceKpiWidgets from '../components/dashboard/ComplianceKpiWidgets'
 import BiosecurityCompliancePanel from '../components/dashboard/BiosecurityCompliancePanel'
 import TopViolationsWidget from '../components/dashboard/TopViolationsWidget'
 import CameraHealthWidget from '../components/dashboard/CameraHealthWidget'
 import GmailDeliveryWidget from '../components/dashboard/GmailDeliveryWidget'
+import DashboardLiveSection from '../components/dashboard/DashboardLiveSection'
+import CollapsibleRealtimeEventPanel from '../components/realtime/CollapsibleRealtimeEventPanel'
+import EventsListPanel from '../components/EventsListPanel'
+import ErrorBoundary from '../components/common/ErrorBoundary'
 import { useDashboardBootstrap } from '../context/DashboardBootstrapStore'
+import { useEventStore } from '../context/EventStore'
 
 const COLORS = ['#0B6B1B', '#F36A10', '#dc2626', '#facc15', '#64748b']
 
@@ -51,8 +53,88 @@ function formatCrossTime(value) {
   return new Date(value).toLocaleString('vi-VN')
 }
 
+function healthTone(value) {
+  if (value === 'ok' || value === true) return 'ok'
+  if (value === 'degraded' || value === 'warn' || value === 'warning') return 'warn'
+  if (value == null || value === '—') return 'warn'
+  return 'risk'
+}
+
+function formatHealthValue(value) {
+  if (value == null || value === '') return '—'
+  if (typeof value === 'boolean') return value ? 'Hoạt động' : 'Ngưng'
+  if (value === 'ok') return 'Bình thường'
+  if (value === 'degraded') return 'Suy giảm'
+  if (value === 'unavailable') return 'Không khả dụng'
+  return String(value)
+}
+
+function DashboardSystemStatusPanel({
+  systemHealth,
+  connected,
+  cameraHealth,
+  notificationSummary,
+  loading,
+}) {
+  const items = [
+    {
+      label: 'AI Engine',
+      value: connected ? 'Hoạt động' : 'Đang kết nối…',
+      tone: connected ? 'ok' : 'warn',
+    },
+    {
+      label: 'Database',
+      value: formatHealthValue(systemHealth?.database),
+      tone: healthTone(systemHealth?.database),
+    },
+    {
+      label: 'Redis',
+      value: formatHealthValue(systemHealth?.redis),
+      tone: healthTone(systemHealth?.redis),
+    },
+    {
+      label: 'Camera Online',
+      value: loading ? '…' : `${cameraHealth?.online ?? 0}/${cameraHealth?.total ?? 0}`,
+      tone: 'ok',
+    },
+    {
+      label: 'Gateway',
+      value: formatHealthValue(systemHealth?.websocket),
+      tone: healthTone(systemHealth?.websocket),
+    },
+    {
+      label: 'Notification',
+      value: notificationSummary?.gmail?.connected ? 'Gmail kết nối' : 'Chưa kết nối',
+      tone: notificationSummary?.gmail?.connected ? 'ok' : 'warn',
+    },
+  ]
+
+  return (
+    <article className="panel dashboard-system-status">
+      <div className="panel__header">
+        <div>
+          <h2>Trạng thái hệ thống</h2>
+          <p>AI, cơ sở dữ liệu và kênh thông báo</p>
+        </div>
+      </div>
+      <ul className="dashboard-system-status__list">
+        {items.map((item) => (
+          <li
+            key={item.label}
+            className={`dashboard-system-status__item dashboard-system-status__item--${item.tone}`}
+          >
+            <span>{item.label}</span>
+            <strong>{item.value}</strong>
+          </li>
+        ))}
+      </ul>
+    </article>
+  )
+}
+
 function DashboardPage() {
   const { data, loading } = useDashboardBootstrap()
+  const { cameras, connected } = useEventStore()
 
   const atshSummary = data?.dashboardSummary ?? null
   const complianceKpis = data?.complianceSummary?.kpis ?? null
@@ -62,26 +144,48 @@ function DashboardPage() {
   const workflowCompliance = data?.workflowSummary?.compliance ?? null
   const workflowDashboard = data?.workflowSummary?.dashboard ?? null
   const recentCrossings = data?.workflowSummary?.recentCrossings?.items ?? []
+  const systemHealth = data?.systemHealth ?? null
+  const liveCameras = cameras?.length ? cameras : data?.cameraSummary?.cameras
 
   return (
-    <div className="dashboard-page">
-      <img src={LOGO_SRC} alt="TIN NGHIA AMS" className="dashboard-page__brand-mark" />
-      <ComplianceKpiWidgets kpis={complianceKpis} loading={loading} />
-      <section className="dashboard-grid">
-        <BiosecurityCompliancePanel />
-      </section>
-      <section className="dashboard-grid dashboard-grid--lists">
-        <TopViolationsWidget items={topViolations} loading={loading} />
-        <GmailDeliveryWidget summary={notificationSummary} loading={loading} />
-        <CameraHealthWidget summary={cameraHealth} loading={loading} />
+    <div className="dashboard-page dashboard-enterprise">
+      <section className="dashboard-enterprise__row dashboard-enterprise__row--stats">
+        <ComplianceKpiWidgets kpis={complianceKpis} loading={loading} />
       </section>
 
-      <section className="dashboard-grid">
+      <ErrorBoundary fallbackTitle="Không thể hiển thị camera live">
+        <section className="dashboard-enterprise__row dashboard-enterprise__row--primary">
+          <DashboardLiveSection cameras={liveCameras} />
+          <div className="dashboard-enterprise__stack">
+            <CollapsibleRealtimeEventPanel defaultExpanded variant="page" limit={12} />
+            <TopViolationsWidget items={topViolations} loading={loading} />
+          </div>
+        </section>
+      </ErrorBoundary>
+
+      <ErrorBoundary fallbackTitle="Không thể hiển thị sự kiện">
+        <section className="dashboard-enterprise__row dashboard-enterprise__row--secondary">
+          <EventsListPanel />
+          <div className="dashboard-enterprise__stack">
+            <DashboardSystemStatusPanel
+              systemHealth={systemHealth}
+              connected={connected}
+              cameraHealth={cameraHealth}
+              notificationSummary={notificationSummary}
+              loading={loading}
+            />
+            <CameraHealthWidget summary={cameraHealth} loading={loading} />
+            <GmailDeliveryWidget summary={notificationSummary} loading={loading} />
+          </div>
+        </section>
+      </ErrorBoundary>
+
+      <section className="dashboard-enterprise__row dashboard-enterprise__row--charts">
         <article className="panel panel--chart">
           <div className="panel__header">
             <div>
               <h2>Biểu đồ cảnh báo 7 ngày</h2>
-              <p>Xu hướng cảnh báo AI theo ngày</p>
+              <p>Vi phạm theo ngày</p>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={260}>
@@ -104,7 +208,7 @@ function DashboardPage() {
           <div className="panel__header">
             <div>
               <h2>Phân bố cảnh báo</h2>
-              <p>Theo loại cảnh báo AI</p>
+              <p>Vi phạm theo loại</p>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={260}>
@@ -118,9 +222,34 @@ function DashboardPage() {
             </PieChart>
           </ResponsiveContainer>
         </article>
+
+        <article className="panel">
+          <div className="panel__header">
+            <div>
+              <h2>Top camera nhiều vi phạm</h2>
+              <p>Camera phát sinh nhiều cảnh báo</p>
+            </div>
+          </div>
+          <div className="rank-list">
+            {getTopCameras().map((camera, index) => (
+              <div key={camera.id} className="rank-item">
+                <span className="rank-item__index">{index + 1}</span>
+                <div>
+                  <strong>{camera.name}</strong>
+                  <p>{camera.zone}</p>
+                </div>
+                <span>{camera.totalEvents} sự kiện</span>
+              </div>
+            ))}
+          </div>
+        </article>
       </section>
 
-      <section className="dashboard-grid dashboard-grid--lists">
+      <section className="dashboard-enterprise__row dashboard-enterprise__row--details-wide">
+        <BiosecurityCompliancePanel />
+      </section>
+
+      <section className="dashboard-enterprise__row dashboard-enterprise__row--details">
         <article className="panel panel--workflow">
           <div className="panel__header">
             <div>
@@ -169,9 +298,7 @@ function DashboardPage() {
             <p className="crossing-list__empty">Chưa tải được thống kê vi phạm ATSH.</p>
           )}
         </article>
-      </section>
 
-      <section className="dashboard-grid dashboard-grid--lists">
         <article className="panel panel--workflow">
           <div className="panel__header">
             <div>
@@ -219,7 +346,9 @@ function DashboardPage() {
             <p className="crossing-list__empty">Chưa tải được dữ liệu workflow compliance.</p>
           )}
         </article>
+      </section>
 
+      <section className="dashboard-enterprise__row dashboard-enterprise__row--details">
         <article className="panel panel--workflow">
           <div className="panel__header">
             <div>
@@ -281,12 +410,14 @@ function DashboardPage() {
             )}
           </div>
         </article>
+      </section>
 
+      <section className="dashboard-enterprise__row dashboard-enterprise__row--details">
         <article className="panel">
           <div className="panel__header">
             <div>
               <h2>Chuyển vùng gần đây</h2>
-              <p>Đối tượng vừa chuyển zone trên camera</p>
+              <p>Sự kiện gần đây — đối tượng chuyển zone trên camera</p>
             </div>
             <span className="panel__badge">
               <ArrowRightLeft size={16} />
@@ -313,27 +444,6 @@ function DashboardPage() {
                 </div>
               ))
             )}
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel__header">
-            <div>
-              <h2>Top camera nhiều vi phạm</h2>
-              <p>Camera có số sự kiện cao nhất</p>
-            </div>
-          </div>
-          <div className="rank-list">
-            {getTopCameras().map((camera, index) => (
-              <div key={camera.id} className="rank-item">
-                <span className="rank-item__index">{index + 1}</span>
-                <div>
-                  <strong>{camera.name}</strong>
-                  <p>{camera.zone}</p>
-                </div>
-                <span>{camera.totalEvents} sự kiện</span>
-              </div>
-            ))}
           </div>
         </article>
 

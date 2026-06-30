@@ -107,6 +107,7 @@ export function mapCameraToDesigner(camera) {
     farmId: camera.farm_id,
     status: camera.status,
     resolution: camera.resolution,
+    fps: camera.fps ?? null,
     scene: SCENE_BY_CAMERA[camera.id] || 'gate',
   }
 }

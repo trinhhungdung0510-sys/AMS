@@ -103,6 +103,32 @@ export function getImageMetrics(imageElement, containerWidth, containerHeight) {
   }
 }
 
+/** Metrics for object-fit: cover (used on live camera feed). */
+export function getImageMetricsCover(imageElement, containerWidth, containerHeight) {
+  if (!imageElement || !containerWidth || !containerHeight) {
+    return getImageMetrics(imageElement, containerWidth, containerHeight)
+  }
+
+  const naturalWidth = imageElement.naturalWidth || containerWidth
+  const naturalHeight = imageElement.naturalHeight || containerHeight
+  const scale = Math.max(containerWidth / naturalWidth, containerHeight / naturalHeight)
+  const displayWidth = naturalWidth * scale
+  const displayHeight = naturalHeight * scale
+  const offsetX = (containerWidth - displayWidth) / 2
+  const offsetY = (containerHeight - displayHeight) / 2
+
+  return {
+    naturalWidth,
+    naturalHeight,
+    displayWidth,
+    displayHeight,
+    offsetX,
+    offsetY,
+    scaleX: scale,
+    scaleY: scale,
+  }
+}
+
 export function imagePixelToScreenPoint(point, metrics) {
   return {
     x: metrics.offsetX + point.x * metrics.scaleX,
@@ -188,4 +214,45 @@ export function bboxCenter(bbox) {
     x: bbox.x + bbox.width / 2,
     y: bbox.y + bbox.height / 2,
   }
+}
+
+export function rectFromNormalizedCorners(start, end) {
+  const minX = Math.min(start.x, end.x)
+  const maxX = Math.max(start.x, end.x)
+  const minY = Math.min(start.y, end.y)
+  const maxY = Math.max(start.y, end.y)
+
+  return [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+  ].map(roundNormalizedPoint)
+}
+
+export function polygonCentroidNormalized(points) {
+  if (!points?.length) return { x: 0, y: 0 }
+
+  const sum = points.reduce(
+    (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
+    { x: 0, y: 0 },
+  )
+
+  return {
+    x: sum.x / points.length,
+    y: sum.y / points.length,
+  }
+}
+
+/** Share of image area covered by polygon (0–1) using normalized coordinates. */
+export function polygonAreaNormalized(points) {
+  if (!points || points.length < 3) return 0
+
+  let sum = 0
+  for (let index = 0; index < points.length; index += 1) {
+    const next = (index + 1) % points.length
+    sum += points[index].x * points[next].y - points[next].x * points[index].y
+  }
+
+  return Math.abs(sum) / 2
 }

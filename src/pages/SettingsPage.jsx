@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, CheckCircle2, Mail, MessageCircle, Rocket, ShieldCheck, SlidersHorizontal, Stethoscope, Users, X } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Activity, CheckCircle2, Mail, MessageCircle, Rocket, ShieldCheck, SlidersHorizontal, Stethoscope, X } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import CameraFormPanel from '../components/camera/CameraFormPanel'
+import UserManagementPanel from '../components/settings/UserManagementPanel'
 import { alertSettings, severityLabels } from '../data/mockData'
 import { getFarms } from '../services/farmService'
 import { getSystemSettings, updateSystemSettings, createSystemBackup } from '../services/systemSettingsService'
@@ -27,8 +28,11 @@ import {
   updateCamera,
   validateCameraForm,
 } from '../services/cameraService'
+import { loadCameraZones } from '../services/cameraZoneOverlayService'
+import { NEW_CAMERA_ZONE_MESSAGE } from '../utils/cameraZoneReadiness'
 
 function SettingsPage() {
+  const navigate = useNavigate()
   const [cameras, setCameras] = useState([])
   const [farms, setFarms] = useState([{ id: 'FARM-001', name: 'AMS Farm Long An' }])
   const [loading, setLoading] = useState(true)
@@ -43,6 +47,9 @@ function SettingsPage() {
   const [notificationAction, setNotificationAction] = useState('')
   const [zaloModalOpen, setZaloModalOpen] = useState(false)
   const [zaloSession, setZaloSession] = useState(null)
+  const [alertPrefs, setAlertPrefs] = useState(() =>
+    Object.fromEntries(alertSettings.map((setting) => [setting.id, setting.enabled])),
+  )
   const zaloPollRef = useRef(null)
 
   const formInitialValues = useMemo(() => {
@@ -107,8 +114,16 @@ function SettingsPage() {
     try {
       const created = await createCamera(buildCameraPayload(values))
       setCameras((prev) => [...prev, created])
-      setStatusMessage(`Đã thêm ${created.name}`)
       closeForm()
+
+      const zones = await loadCameraZones(created.id).catch(() => [])
+      if (zones.length === 0) {
+        setStatusMessage(NEW_CAMERA_ZONE_MESSAGE)
+        navigate(`/thiet-ke-vung-atsh?camera=${encodeURIComponent(created.id)}`)
+        return
+      }
+
+      setStatusMessage(`Đã thêm ${created.name}`)
     } catch (error) {
       setStatusMessage(error.message)
     }
@@ -362,28 +377,11 @@ function SettingsPage() {
 
       <div className="settings-grid">
         <section className="panel">
-          <div className="panel__header">
-            <div>
-              <h2><Users size={18} /> Danh sách người dùng</h2>
-              <p>5 người dùng mẫu và trạng thái tài khoản</p>
-            </div>
-          </div>
-          <div className="settings-list">
-            {(managedUsers.length ? managedUsers : []).map((user) => (
-              <div key={user.id} className="settings-list__item">
-                <div>
-                  <strong>{user.full_name}</strong>
-                  <span>{user.email} · {user.role}</span>
-                </div>
-                <span className={`status-tag status-tag--${user.is_active ? 'resolved' : 'new'}`}>
-                  {user.is_active ? 'Hoạt động' : 'Tạm khóa'}
-                </span>
-              </div>
-            ))}
-            {!managedUsers.length ? (
-              <p className="panel__meta">Chưa tải được danh sách user từ API.</p>
-            ) : null}
-          </div>
+          <UserManagementPanel
+            users={managedUsers}
+            onUsersChange={setManagedUsers}
+            onStatus={setStatusMessage}
+          />
         </section>
 
         <section className="panel">
@@ -525,9 +523,6 @@ function SettingsPage() {
               </svg>
               Thêm camera
             </button>
-            <Link to="/thiet-ke-vung-atsh" className="btn btn--outline">
-              Thiết kế vùng ATSH
-            </Link>
           </div>
 
           {loading ? (
@@ -625,7 +620,17 @@ function SettingsPage() {
                   <span>Ngưỡng: {setting.threshold} · Mức độ: {severityLabels[setting.severity]}</span>
                 </div>
                 <label className="toggle">
-                  <input type="checkbox" defaultChecked={setting.enabled} />
+                  <input
+                    type="checkbox"
+                    checked={Boolean(alertPrefs[setting.id])}
+                    onChange={(event) => {
+                      setAlertPrefs((prev) => ({
+                        ...prev,
+                        [setting.id]: event.target.checked,
+                      }))
+                      setStatusMessage(`Đã ${event.target.checked ? 'bật' : 'tắt'} cảnh báo: ${setting.name}`)
+                    }}
+                  />
                   <span className="toggle__slider" />
                 </label>
               </div>

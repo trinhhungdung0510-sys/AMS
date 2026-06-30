@@ -25,6 +25,16 @@ export function getRiskLabel(risk) {
   return labels[risk] ?? 'Trực tuyến'
 }
 
+export function downloadTextFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 export function exportRowsAsExcel(filename, rows) {
   const header = Object.keys(rows[0] ?? {})
   const csv = [

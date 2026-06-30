@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Camera, Radio } from 'lucide-react'
 import { apiFetch } from '../services/apiClient'
 
-function CameraFeed({ camera, size = 'tile' }) {
+function CameraFeed({ camera, size = 'tile', children = null }) {
   const isOnline = camera.status === 'online'
   const [frameSrc, setFrameSrc] = useState('')
   const [frameTick, setFrameTick] = useState(() => Date.now())
@@ -66,6 +66,12 @@ function CameraFeed({ camera, size = 'tile' }) {
               alt={camera.name}
               className="camera-feed__image"
             />
+          ) : null}
+
+          {children ? (
+            <div className="camera-feed__overlay-layer">
+              {children}
+            </div>
           ) : null}
 
           <div className="camera-feed__top">

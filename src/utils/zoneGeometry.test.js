@@ -4,6 +4,7 @@ import {
   normalizePoint,
   pointInPolygon,
   bboxCenter,
+  polygonAreaNormalized,
   resolveNormalizedPoints,
   scalePolygonToNormalized,
 } from './zoneGeometry'
@@ -107,5 +108,17 @@ describe('bboxCenter', () => {
       x: 0.4,
       y: 0.4,
     })
+  })
+})
+
+describe('polygonAreaNormalized', () => {
+  it('returns normalized share of image area', () => {
+    const half = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 0.5 },
+      { x: 0, y: 0.5 },
+    ]
+    expect(polygonAreaNormalized(half)).toBeCloseTo(0.5, 4)
   })
 })

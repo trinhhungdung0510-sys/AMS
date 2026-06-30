@@ -5,7 +5,9 @@ import { generateMockObservation, listMockScenarios } from '../../mock/mockDetec
 import { useRealtimeEvents } from '../../hooks/useRealtimeEvents'
 import { listObservations } from '../../services/observationService'
 import { getRules } from '../../services/ruleService'
-import { getZones } from '../../services/zoneService'
+import { CAMERA_ZONES_UPDATED_EVENT } from '../../services/cameraZoneOverlayService'
+import { ZONE_PUBLISHED_EVENT } from '../../services/zonePublishService'
+import { loadEngineZones } from '../../utils/cameraZoneReadiness'
 import { formatDateTime } from '../../utils/formatters'
 
 const SOURCE_LABELS = {
@@ -15,7 +17,7 @@ const SOURCE_LABELS = {
   MANUAL: 'Manual',
 }
 
-function ObservationViewer({ cameraId, onEventsCreated }) {
+function ObservationViewer({ cameraId, monitoringReady = true, onEventsCreated }) {
   const mountedRef = useRef(true)
   const [observations, setObservations] = useState([])
   const [zones, setZones] = useState([])
@@ -59,7 +61,7 @@ function ObservationViewer({ cameraId, onEventsCreated }) {
     try {
       const [observationData, zoneData, ruleData] = await Promise.all([
         listObservations(cameraId),
-        getZones(cameraId),
+        loadEngineZones(cameraId),
         getRules(cameraId),
       ])
       if (!mountedRef.current) return
@@ -78,6 +80,22 @@ function ObservationViewer({ cameraId, onEventsCreated }) {
     loadData()
   }, [loadData])
 
+  useEffect(() => {
+    const handleZonesUpdated = (event) => {
+      const updatedCameraId = event.detail?.cameraId
+      if (!updatedCameraId || updatedCameraId === cameraId) {
+        loadData()
+      }
+    }
+
+    window.addEventListener(CAMERA_ZONES_UPDATED_EVENT, handleZonesUpdated)
+    window.addEventListener(ZONE_PUBLISHED_EVENT, handleZonesUpdated)
+    return () => {
+      window.removeEventListener(CAMERA_ZONES_UPDATED_EVENT, handleZonesUpdated)
+      window.removeEventListener(ZONE_PUBLISHED_EVENT, handleZonesUpdated)
+    }
+  }, [cameraId, loadData])
+
   useRealtimeEvents({
     filterCameraId: cameraId,
     eventTypes: ['observation.created', 'event.created'],
@@ -94,6 +112,11 @@ function ObservationViewer({ cameraId, onEventsCreated }) {
   })
 
   const handleRunPipeline = async () => {
+    if (!monitoringReady) {
+      setError('Camera chưa cấu hình vùng ATSH hợp lệ. AI phân tích theo vùng sẽ không chạy.')
+      return
+    }
+
     setRunning(true)
     setError('')
     setSuccess('')
@@ -124,6 +147,11 @@ function ObservationViewer({ cameraId, onEventsCreated }) {
 
         {error ? <div className="rule-manager__error">{error}</div> : null}
         {success ? <div className="rule-manager__success">{success}</div> : null}
+        {!monitoringReady ? (
+          <p className="observation-viewer__gate" role="status">
+            Camera chưa cấu hình vùng ATSH — pipeline AI theo vùng đang tắt cho camera này.
+          </p>
+        ) : null}
 
         <div className="observation-viewer__actions">
           <label>
@@ -142,7 +170,7 @@ function ObservationViewer({ cameraId, onEventsCreated }) {
             type="button"
             className="btn btn--primary"
             onClick={handleRunPipeline}
-            disabled={running || loading}
+            disabled={running || loading || !monitoringReady}
           >
             {running ? 'Đang chạy pipeline...' : 'Chạy Mock Pipeline'}
           </button>

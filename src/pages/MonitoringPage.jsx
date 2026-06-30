@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import CameraFeed from '../components/CameraFeed'
+import CameraLiveWithZones from '../components/camera/CameraLiveWithZones'
 import { getCameras } from '../services/cameraService'
 
 function MonitoringPage() {
@@ -68,7 +68,7 @@ function MonitoringPage() {
             to={`/monitoring/${camera.id}`}
             className="monitor-card"
           >
-            <CameraFeed camera={camera} />
+            <CameraLiveWithZones camera={camera} size="tile" compactLabels />
 
             <div className="monitor-card__body">
               <h3>{camera.name}</h3>

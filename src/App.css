@@ -360,6 +360,87 @@
   font-weight: 900;
 }
 
+.header__alert-wrap {
+  position: relative;
+}
+
+.header__alert-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: min(320px, 90vw);
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.header__alert-menu-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+.header__alert-menu-meta {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--gray-600);
+}
+
+.header__alert-menu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-list__item-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-list__item--actions {
+  align-items: center;
+}
+
+.settings-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+}
+
+.settings-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(15 23 42 / 45%);
+  cursor: pointer;
+}
+
+.settings-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, calc(100vw - 32px));
+  padding: 20px;
+}
+
+.settings-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.violation-drawer__zoom-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
 .page-content {
   flex: 1;
   padding: 24px 28px 32px;
@@ -981,6 +1062,11 @@
   background: var(--gray-100);
   font-family: ui-monospace, Consolas, monospace;
   font-weight: 800;
+}
+
+.camera-detail__name {
+  font-weight: 700;
+  color: var(--gray-800, #1e293b);
 }
 
 .camera-detail__layout {

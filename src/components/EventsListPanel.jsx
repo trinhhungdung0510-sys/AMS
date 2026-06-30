@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Download, Search } from 'lucide-react'
 import { useEventStore } from '../context/EventStore'
+import { useDashboardBootstrap } from '../context/DashboardBootstrapStore'
 import { useViolationProcessing } from '../context/ViolationProcessingContext'
 import { severityLabels, statusLabels } from '../data/mockData'
 import { exportRowsAsExcel, formatDateTime } from '../utils/formatters'
@@ -8,7 +9,8 @@ import { exportRowsAsExcel, formatDateTime } from '../utils/formatters'
 const pageSize = 10
 
 function EventsListPanel() {
-  const { events, loading, error, reload } = useEventStore()
+  const { events, loading, error } = useEventStore()
+  const { retry } = useDashboardBootstrap()
   const { openViolation } = useViolationProcessing()
   const [search, setSearch] = useState('')
   const [timeFilter, setTimeFilter] = useState('all')
@@ -59,7 +61,7 @@ function EventsListPanel() {
       {error ? (
         <div className="realtime-feed__error">
           <p>{error}</p>
-          <button type="button" className="btn btn--outline btn--sm" onClick={reload}>
+          <button type="button" className="btn btn--outline btn--sm" onClick={retry}>
             Tải lại sự kiện
           </button>
         </div>

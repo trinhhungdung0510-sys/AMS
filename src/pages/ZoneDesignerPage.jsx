@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Copy,
   Download,
@@ -53,8 +54,17 @@ import {
   listZones,
   updateZone,
 } from '../services/farmZoneService'
+import { publishCameraZones } from '../services/zonePublishService'
+import { usePermissions } from '../hooks/usePermissions'
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard'
+import { useCameraLifecycle } from '../hooks/useCameraLifecycle'
+import ZonePublishNotice from '../components/camera/ZonePublishNotice'
+import CameraLifecycleBadge from '../components/camera/CameraLifecycleBadge'
+import { getMonitoringStatus, getMonitoringStatusLabel, MONITORING_STATUS } from '../utils/cameraZoneReadiness'
 
-function ZoneDesignerPage() {
+function ZoneDesignerPage({ hideHero = false }) {
+  const [searchParams] = useSearchParams()
+  const { canManageAtshZones, roleLabel } = usePermissions()
   const canvasRef = useRef(null)
   const viewportRef = useRef(null)
   const [farmFilter, setFarmFilter] = useState('all')
@@ -89,6 +99,15 @@ function ZoneDesignerPage() {
   const [historyFuture, setHistoryFuture] = useState([])
   const [frameTick, setFrameTick] = useState(0)
   const [frameSrc, setFrameSrc] = useState('')
+  const [isDirty, setIsDirty] = useState(false)
+
+  const markDirty = useCallback(() => {
+    if (canManageAtshZones) setIsDirty(true)
+  }, [canManageAtshZones])
+
+  const markClean = useCallback(() => {
+    setIsDirty(false)
+  }, [])
 
   const selectedCamera = useMemo(
     () => designerCameras.find((item) => item.id === selectedCameraId) ?? designerCameras[0],
@@ -116,6 +135,35 @@ function ZoneDesignerPage() {
   const selectedCategory = categoryMeta(zoneCategory)
   const cameraStatus = selectedCamera?.status ?? 'offline'
   const cameraResolution = selectedCamera?.resolution ?? `${CANVAS_WIDTH}x${CANVAS_HEIGHT}`
+
+  const {
+    lifecycle,
+    lifecycleLabel,
+  } = useCameraLifecycle(selectedCamera, { isZoneEditing: isDirty })
+
+  const monitoringStatus = getMonitoringStatus(
+    zones.map((zone) => ({ points: zone.polygon_points, active: true })),
+  )
+  const monitoringStatusLabel = getMonitoringStatusLabel(
+    zones.map((zone) => ({ points: zone.polygon_points, active: true })),
+  )
+
+  const publishAfterSave = useCallback((nextZones) => {
+    publishCameraZones(selectedCameraId, {
+      zones: nextZones.map((zone) => ({
+        polygon_points: zone.polygon_points,
+        points: zone.points,
+        active: zone.active !== false,
+      })),
+    })
+  }, [selectedCameraId])
+
+  useEffect(() => {
+    const cameraFromUrl = searchParams.get('camera')
+    if (cameraFromUrl) {
+      setSelectedCameraId(cameraFromUrl)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     let cancelled = false
@@ -158,7 +206,8 @@ function ZoneDesignerPage() {
   const pushHistory = useCallback(() => {
     setHistoryPast((prev) => [...prev.slice(-30), makeSnapshot()])
     setHistoryFuture([])
-  }, [makeSnapshot])
+    markDirty()
+  }, [makeSnapshot, markDirty])
 
   const loadZones = useCallback(async (cameraId) => {
     if (!cameraId) return
@@ -171,11 +220,16 @@ function ZoneDesignerPage() {
       setSelectedZoneId(cameraZones[0]?.id ?? null)
       setSelectedVertexIndex(null)
       setApiStatus(`${cameraZones.length} vùng trên camera`)
+      markClean()
     } catch (error) {
       setZones([])
       setApiStatus(`Không tải được vùng: ${error.message}`)
     }
-  }, [])
+  }, [markClean])
+
+  useEffect(() => {
+    markClean()
+  }, [selectedCameraId, markClean])
 
   useEffect(() => {
     if (!selectedCameraId) return undefined
@@ -270,6 +324,7 @@ function ZoneDesignerPage() {
   }
 
   const setTool = (tool) => {
+    if (!canManageAtshZones) return
     setMode(tool)
     resetDraft()
     setSelectedVertexIndex(null)
@@ -285,6 +340,7 @@ function ZoneDesignerPage() {
   }
 
   const handleCanvasClick = (event) => {
+    if (!canManageAtshZones) return
     const point = readPoint(event)
 
     if (mode === 'polygon') {
@@ -379,6 +435,7 @@ function ZoneDesignerPage() {
   }
 
   const saveDraft = async () => {
+    if (!canManageAtshZones) return
     if (draftPoints.length < 3) {
       setApiStatus('Cần tối thiểu 3 điểm để lưu vùng')
       return
@@ -394,17 +451,24 @@ function ZoneDesignerPage() {
         rules: zoneRules,
       }
       pushHistory()
-      setZones((prev) => [created, ...prev])
+      setZones((prev) => {
+        const nextZones = [created, ...prev]
+        publishAfterSave(nextZones)
+        return nextZones
+      })
       setSelectedZoneId(created.id)
       resetDraft()
       setMode('select')
       setApiStatus(`Đã lưu ${created.zone_name}`)
+      markClean()
     } catch (error) {
       setApiStatus(`Không lưu được: ${error.message}`)
+      throw error
     }
   }
 
   const saveSelectedZone = async () => {
+    if (!canManageAtshZones) return
     if (!selectedZone) return
     const meta = categoryMeta(zoneCategory)
 
@@ -425,28 +489,48 @@ function ZoneDesignerPage() {
         description: zoneDescription,
         rules: zoneRules,
       }
-      setZones((prev) => prev.map((zone) => (zone.id === updated.id ? updated : zone)))
+      setZones((prev) => {
+        const nextZones = prev.map((zone) => (zone.id === updated.id ? updated : zone))
+        publishAfterSave(nextZones)
+        return nextZones
+      })
       setApiStatus(`Đã cập nhật ${updated.zone_name}`)
+      markClean()
     } catch (error) {
       setApiStatus(`Không cập nhật được: ${error.message}`)
+      throw error
     }
   }
 
   const saveAll = async () => {
+    if (!canManageAtshZones) return
     if (selectedZone) await saveSelectedZone()
     else if (draftPoints.length >= 3) await saveDraft()
-    else setApiStatus('Chọn vùng hoặc vẽ vùng trước khi lưu')
+    else {
+      setApiStatus('Chọn vùng hoặc vẽ vùng trước khi lưu')
+      throw new Error('Chọn vùng hoặc vẽ vùng trước khi lưu')
+    }
   }
 
+  useUnsavedChangesGuard(isDirty, {
+    enabled: canManageAtshZones,
+  })
+
   const deleteSelected = async () => {
+    if (!canManageAtshZones) return
     if (selectedZone) {
       try {
         await deleteZoneApi(selectedZone.id)
         pushHistory()
-        setZones((prev) => prev.filter((zone) => zone.id !== selectedZone.id))
+        setZones((prev) => {
+          const nextZones = prev.filter((zone) => zone.id !== selectedZone.id)
+          publishAfterSave(nextZones)
+          return nextZones
+        })
         setSelectedZoneId(null)
         setSelectedVertexIndex(null)
         setApiStatus('Đã xóa vùng')
+        markClean()
       } catch (error) {
         setApiStatus(`Không xóa được: ${error.message}`)
       }
@@ -462,6 +546,7 @@ function ZoneDesignerPage() {
   }
 
   const duplicateSelectedZone = async () => {
+    if (!canManageAtshZones) return
     if (!selectedZone) {
       setApiStatus('Chọn vùng để nhân bản')
       return
@@ -481,9 +566,14 @@ function ZoneDesignerPage() {
         rules: zoneRules,
       }
       pushHistory()
-      setZones((prev) => [created, ...prev])
+      setZones((prev) => {
+        const nextZones = [created, ...prev]
+        publishAfterSave(nextZones)
+        return nextZones
+      })
       setSelectedZoneId(created.id)
       setApiStatus(`Đã nhân bản ${created.zone_name}`)
+      markClean()
     } catch (error) {
       setApiStatus(`Không nhân bản được: ${error.message}`)
     }
@@ -535,7 +625,10 @@ function ZoneDesignerPage() {
     })
   }
 
-  const exportPdf = () => window.print()
+  const exportPdf = () => {
+    if (!canManageAtshZones) return
+    window.print()
+  }
 
   const handleWheel = (event) => {
     event.preventDefault()
@@ -552,143 +645,73 @@ function ZoneDesignerPage() {
 
   return (
     <div className="zone-designer-pro">
-      <header className="zone-designer-pro__hero">
-        <div>
-          <span className="zone-designer-pro__eyebrow">Thiết kế vùng ATSH</span>
-          <h1>Thiết kế vùng ATSH</h1>
-          <p>Chỉnh sửa vùng an toàn sinh học trực tiếp trên hình ảnh camera thực tế.</p>
-        </div>
-        <div className="zone-designer-pro__hero-actions">
-          <button type="button" className="btn btn--outline zone-btn-soft" onClick={saveSelectedZone} disabled={!selectedZone}>
+      {!hideHero ? (
+        <header className="zone-designer-pro__hero">
+          <div>
+            <span className="zone-designer-pro__eyebrow">Thiết kế vùng ATSH</span>
+            <h1>Thiết kế vùng ATSH</h1>
+            <p>Chỉnh sửa vùng an toàn sinh học trực tiếp trên hình ảnh camera thực tế.</p>
+          </div>
+          <div className="zone-designer-pro__hero-actions">
+            <button type="button" className="btn btn--outline zone-btn-soft" onClick={saveSelectedZone} disabled={!canManageAtshZones || !selectedZone}>
+              <Save size={16} /> Lưu
+            </button>
+            <button type="button" className="btn btn--outline zone-btn-soft" onClick={saveAll} disabled={!canManageAtshZones}>
+              <Save size={16} /> Lưu tất cả
+            </button>
+            <button type="button" className="btn btn--primary zone-btn-soft" onClick={exportPdf} disabled={!canManageAtshZones}>
+              <Download size={16} /> Xuất PDF
+            </button>
+          </div>
+        </header>
+      ) : (
+        <div className="zone-designer-pro__toolbar">
+          <button type="button" className="btn btn--outline zone-btn-soft" onClick={saveSelectedZone} disabled={!canManageAtshZones || !selectedZone}>
             <Save size={16} /> Lưu
           </button>
-          <button type="button" className="btn btn--outline zone-btn-soft" onClick={saveAll}>
+          <button type="button" className="btn btn--outline zone-btn-soft" onClick={saveAll} disabled={!canManageAtshZones}>
             <Save size={16} /> Lưu tất cả
           </button>
-          <button type="button" className="btn btn--primary zone-btn-soft" onClick={exportPdf}>
+          <button type="button" className="btn btn--primary zone-btn-soft" onClick={exportPdf} disabled={!canManageAtshZones}>
             <Download size={16} /> Xuất PDF
           </button>
         </div>
-      </header>
+      )}
 
-      <div className="zone-designer-pro__layout">
-        <aside className="zone-designer-pro__cameras panel">
-          <div className="zone-panel-head">
-            <h2>Danh sách camera</h2>
-            <p>{filteredCameras.length} camera</p>
+      <ZonePublishNotice cameraId={selectedCameraId} />
+
+      {!canManageAtshZones ? (
+        <p className="zone-designer-pro__readonly" role="status">
+          Chế độ chỉ xem ({roleLabel}) — bạn không có quyền Quản lý vùng ATSH.
+        </p>
+      ) : null}
+
+      <section className="zone-designer-pro__stage panel">
+        <div className="zone-designer-pro__camera-info">
+          <div className="zone-designer-pro__camera-title">
+            <h2>{selectedCamera?.name || 'Chưa chọn camera'}</h2>
+            <span>{selectedCamera?.zone || '—'}</span>
           </div>
-
-          <div className="zone-camera-filters">
-            <label className="zone-camera-search">
-              <Search size={14} />
-              <input
-                type="search"
-                placeholder="Tìm camera, khu vực..."
-                value={cameraSearch}
-                onChange={(e) => setCameraSearch(e.target.value)}
-              />
-            </label>
-            <label>
-              <span>Lọc theo trại</span>
-              <select value={farmFilter} onChange={(e) => setFarmFilter(e.target.value)}>
-                <option value="all">Tất cả trại</option>
-                {farms.map((farm) => (
-                  <option key={farm.id} value={farm.id}>{farm.name}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="zone-camera-list">
-            {filteredCameras.map((camera) => {
-              const online = camera.status === 'online'
-              return (
-                <button
-                  type="button"
-                  key={camera.id}
-                  className={`zone-camera-item${selectedCameraId === camera.id ? ' zone-camera-item--active' : ''}`}
-                  onClick={() => setSelectedCameraId(camera.id)}
-                >
-                  <span className={`zone-camera-item__dot zone-camera-item__dot--${online ? 'online' : 'offline'}`} />
-                  <span>
-                    <strong>{camera.name}</strong>
-                    <small>{camera.zone}</small>
-                    <small className="zone-camera-item__status">{online ? '● Đang hoạt động' : '● Ngắt kết nối'}</small>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </aside>
-
-        <section className="zone-designer-pro__canvas panel">
-          <div className="zone-canvas-toolbar">
-            {[
-              ['select', 'Chọn vùng', MousePointer2],
-              ['pan', 'Kéo ảnh', Hand],
-              ['polygon', 'Đa giác', Shapes],
-              ['rect', 'Hình chữ nhật', Square],
-              ['line', 'Đường', PenLine],
-            ].map(([tool, label, Icon]) => (
-              <button
-                key={tool}
-                type="button"
-                className={`zone-tool-btn${mode === tool ? ' zone-tool-btn--active' : ''}`}
-                onClick={() => setTool(tool)}
-              >
-                <Icon size={16} /> {label}
-              </button>
-            ))}
-            <button type="button" className="zone-tool-btn" onClick={duplicateSelectedZone} disabled={!selectedZone}>
-              <Copy size={16} /> Nhân bản
-            </button>
-            <button type="button" className="zone-tool-btn" onClick={deleteSelectedVertex} disabled={selectedVertexIndex === null}>
-              <Plus size={16} style={{ transform: 'rotate(45deg)' }} /> Xóa điểm
-            </button>
-            <button type="button" className="zone-tool-btn" onClick={deleteSelected}>
-              <Trash2 size={16} /> Xóa vùng
-            </button>
-            <button type="button" className="zone-tool-btn" onClick={undo} disabled={!historyPast.length}>
-              <RotateCcw size={16} /> Hoàn tác
-            </button>
-            <button type="button" className="zone-tool-btn" onClick={redo} disabled={!historyFuture.length}>
-              <Redo2 size={16} /> Làm lại
-            </button>
-            <button type="button" className="zone-tool-btn zone-tool-btn--save" onClick={saveAll}>
-              <Save size={16} /> Lưu
-            </button>
-            <div className="zone-canvas-toolbar__zoom">
-              <button type="button" className="zone-tool-btn" onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}>
-                <ZoomOut size={16} />
-              </button>
-              <span>{Math.round(zoom * 100)}%</span>
-              <button type="button" className="zone-tool-btn" onClick={() => setZoom((z) => Math.min(3, z + 0.1))}>
-                <ZoomIn size={16} />
-              </button>
-              <button type="button" className="zone-tool-btn" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}>
-                1:1
-              </button>
-              <button type="button" className="zone-tool-btn" onClick={refreshFrame}>
-                Frame
-              </button>
-              <button type="button" className="zone-tool-btn" onClick={toggleFullscreen}>
-                <Expand size={16} />
-              </button>
-            </div>
-          </div>
-
-          <div className="zone-canvas-meta">
+          <div className="zone-designer-pro__camera-meta">
             <span className={`zone-status-pill zone-status-pill--${cameraStatus}`}>
-              {cameraStatus === 'online' ? '● Frame mới nhất' : '● Camera offline'}
+              {cameraStatus === 'online' ? 'Online' : 'Offline'}
             </span>
-            <strong>{selectedCamera?.name}</strong>
-            <span>{selectedCamera?.zone} · {cameraResolution}</span>
-            <span className="zone-canvas-meta__status">{apiStatus}</span>
+            <span className={`zone-status-pill zone-status-pill--${monitoringStatus === MONITORING_STATUS.READY ? 'ready' : 'pending'}`}>
+              {monitoringStatusLabel}
+            </span>
+            {lifecycle ? (
+              <CameraLifecycleBadge lifecycle={lifecycle} title={lifecycleLabel} />
+            ) : null}
+            <span>{cameraResolution}</span>
+            {selectedCamera?.fps ? <span>{selectedCamera.fps} FPS</span> : null}
           </div>
+          <span className="zone-designer-pro__camera-status">{apiStatus}</span>
+        </div>
 
+        <div className="zone-designer-pro__preview-wrap">
           <div
             ref={viewportRef}
-            className="zone-viewport"
+            className="zone-viewport zone-viewport--contain"
             onWheel={handleWheel}
             onPointerDown={(event) => {
               if (mode === 'pan' || (mode === 'select' && event.target === viewportRef.current)) {
@@ -715,7 +738,7 @@ function ZoneDesignerPage() {
               className="zone-viewport__inner"
               style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             >
-              <div className="zone-canvas">
+              <div className="zone-canvas zone-canvas--designer">
                 <img
                   src={frameSrc || undefined}
                   alt={selectedCamera?.name}
@@ -857,25 +880,160 @@ function ZoneDesignerPage() {
               </div>
             </div>
           </div>
+        </div>
 
-          {mode === 'line' && draftLinePoints.length >= 2 && (
-            <div className="zone-inline-actions">
-              <button type="button" className="btn btn--primary" onClick={finishLine}>
-                Hoàn tất đường ({draftLinePoints.length} điểm)
+        <div className="zone-canvas-toolbar zone-canvas-toolbar--below">
+            {[
+              ['select', 'Chọn vùng', MousePointer2],
+              ['pan', 'Kéo ảnh', Hand],
+              ['polygon', 'Đa giác', Shapes],
+              ['rect', 'Hình chữ nhật', Square],
+              ['line', 'Đường', PenLine],
+            ].map(([tool, label, Icon]) => (
+              <button
+                key={tool}
+                type="button"
+                className={`zone-tool-btn${mode === tool ? ' zone-tool-btn--active' : ''}`}
+                onClick={() => setTool(tool)}
+              >
+                <Icon size={16} /> {label}
+              </button>
+            ))}
+            <button type="button" className="zone-tool-btn" onClick={duplicateSelectedZone} disabled={!selectedZone}>
+              <Copy size={16} /> Nhân bản
+            </button>
+            <button type="button" className="zone-tool-btn" onClick={deleteSelectedVertex} disabled={selectedVertexIndex === null}>
+              <Plus size={16} style={{ transform: 'rotate(45deg)' }} /> Xóa điểm
+            </button>
+            <button type="button" className="zone-tool-btn" onClick={deleteSelected}>
+              <Trash2 size={16} /> Xóa vùng
+            </button>
+            <button type="button" className="zone-tool-btn" onClick={undo} disabled={!historyPast.length}>
+              <RotateCcw size={16} /> Hoàn tác
+            </button>
+            <button type="button" className="zone-tool-btn" onClick={redo} disabled={!historyFuture.length}>
+              <Redo2 size={16} /> Làm lại
+            </button>
+            <button type="button" className="zone-tool-btn zone-tool-btn--save" onClick={saveAll}>
+              <Save size={16} /> Lưu
+            </button>
+            <div className="zone-canvas-toolbar__zoom">
+              <button type="button" className="zone-tool-btn" onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}>
+                <ZoomOut size={16} />
+              </button>
+              <span>{Math.round(zoom * 100)}%</span>
+              <button type="button" className="zone-tool-btn" onClick={() => setZoom((z) => Math.min(3, z + 0.1))}>
+                <ZoomIn size={16} />
+              </button>
+              <button type="button" className="zone-tool-btn" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}>
+                1:1
+              </button>
+              <button type="button" className="zone-tool-btn" onClick={refreshFrame}>
+                Frame
+              </button>
+              <button type="button" className="zone-tool-btn" onClick={toggleFullscreen}>
+                <Expand size={16} />
               </button>
             </div>
-          )}
+          </div>
 
-          {(mode === 'polygon' || mode === 'rect') && draftPoints.length >= 3 && (
-            <div className="zone-inline-actions">
-              <button type="button" className="btn btn--primary" onClick={saveDraft}>
-                Lưu vùng ({draftPoints.length} điểm)
-              </button>
+        {mode === 'line' && draftLinePoints.length >= 2 && (
+          <div className="zone-inline-actions">
+            <button type="button" className="btn btn--primary" onClick={finishLine}>
+              Hoàn tất đường ({draftLinePoints.length} điểm)
+            </button>
+          </div>
+        )}
+
+        {(mode === 'polygon' || mode === 'rect') && draftPoints.length >= 3 && (
+          <div className="zone-inline-actions">
+            <button type="button" className="btn btn--primary" onClick={saveDraft}>
+              Lưu vùng ({draftPoints.length} điểm)
+            </button>
+          </div>
+        )}
+
+        <div className="zone-designer-pro__panels">
+          <aside className="zone-designer-pro__cameras panel">
+            <div className="zone-panel-head">
+              <h2>Danh sách camera</h2>
+              <p>{filteredCameras.length} camera</p>
             </div>
-          )}
-        </section>
 
-        <aside className="zone-designer-pro__info panel">
+            <div className="zone-camera-filters">
+              <label className="zone-camera-search">
+                <Search size={14} />
+                <input
+                  type="search"
+                  placeholder="Tìm camera, khu vực..."
+                  value={cameraSearch}
+                  onChange={(e) => setCameraSearch(e.target.value)}
+                />
+              </label>
+              <label>
+                <span>Lọc theo trại</span>
+                <select value={farmFilter} onChange={(e) => setFarmFilter(e.target.value)}>
+                  <option value="all">Tất cả trại</option>
+                  {farms.map((farm) => (
+                    <option key={farm.id} value={farm.id}>{farm.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="zone-camera-list">
+              {filteredCameras.map((camera) => {
+                const online = camera.status === 'online'
+                return (
+                  <button
+                    type="button"
+                    key={camera.id}
+                    className={`zone-camera-item${selectedCameraId === camera.id ? ' zone-camera-item--active' : ''}`}
+                    onClick={() => setSelectedCameraId(camera.id)}
+                  >
+                    <span className={`zone-camera-item__dot zone-camera-item__dot--${online ? 'online' : 'offline'}`} />
+                    <span>
+                      <strong>{camera.name}</strong>
+                      <small>{camera.zone}</small>
+                      <small className="zone-camera-item__status">{online ? '● Đang hoạt động' : '● Ngắt kết nối'}</small>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </aside>
+
+          <section className="zone-designer-pro__zones panel">
+            <div className="zone-panel-head">
+              <h2>Danh sách vùng</h2>
+              <p>{zones.length} vùng trên camera</p>
+            </div>
+            <div className="zone-designer-zone-list">
+              {zones.length === 0 ? (
+                <p className="zone-designer-zone-list__empty">Chưa có vùng. Dùng công cụ vẽ phía trên.</p>
+              ) : (
+                zones.map((zone) => (
+                  <button
+                    key={zone.id}
+                    type="button"
+                    className={`zone-designer-zone-item${selectedZoneId === zone.id ? ' zone-designer-zone-item--active' : ''}`}
+                    onClick={() => {
+                      setSelectedZoneId(zone.id)
+                      setSelectedFlowId(null)
+                    }}
+                  >
+                    <span className="zone-designer-zone-item__swatch" style={{ backgroundColor: zone.color }} />
+                    <span>
+                      <strong>{zone.zone_name}</strong>
+                      <small>{zone.zone_type_label || zone.zone_type}</small>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+
+          <aside className="zone-designer-pro__info panel">
           <div className="zone-panel-head">
             <h2>Thuộc tính vùng</h2>
             <p>{selectedZone ? 'Chỉnh sửa vùng đã chọn' : 'Thuộc tính vùng mới'}</p>
@@ -884,7 +1042,7 @@ function ZoneDesignerPage() {
           <div className="zone-info-form">
             <label>
               <span>Tên vùng</span>
-              <input value={zoneName} onChange={(e) => setZoneName(e.target.value)} />
+              <input value={zoneName} onChange={(e) => { setZoneName(e.target.value); markDirty() }} disabled={!canManageAtshZones} />
             </label>
             <label>
               <span>Loại vùng</span>
@@ -987,7 +1145,8 @@ function ZoneDesignerPage() {
             ))}
           </div>
         </aside>
-      </div>
+        </div>
+      </section>
     </div>
   )
 }

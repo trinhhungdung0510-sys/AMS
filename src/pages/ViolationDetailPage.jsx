@@ -10,6 +10,8 @@ import {
   SkipForward,
 } from 'lucide-react'
 import AtshViolationSnapshot from '../components/AtshViolationSnapshot'
+import { useViolationProcessing } from '../context/ViolationProcessingContext'
+import { usePermissions } from '../hooks/usePermissions'
 import {
   ATSH_SEVERITY,
   ATSH_STATUS,
@@ -18,14 +20,19 @@ import {
   getViolationById,
   getViolationTimeline,
 } from '../data/atshViolations'
+import { sendNotificationTest } from '../services/notificationSettingsService'
 import { exportRowsAsExcel, formatDateTime } from '../utils/formatters'
 
 function ViolationDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { updateViolationState } = useViolationProcessing()
+  const { hasPermission } = usePermissions()
+  const canSendAlert = hasPermission('settings.write')
   const base = getViolationById(id)
   const [violation, setViolation] = useState(base ?? atshViolations[0])
   const [notice, setNotice] = useState('')
+  const [sendingAlert, setSendingAlert] = useState(false)
   const timeline = useMemo(() => getViolationTimeline(violation), [violation])
 
   if (!base && !atshViolations.length) {
@@ -45,6 +52,7 @@ function ViolationDetailPage() {
       status,
       handler: status === 'new' ? 'Chưa phân công' : 'Trần Bảo Long',
     }))
+    updateViolationState(violation.id, { statusKey: status })
     setNotice(`Trạng thái: ${ATSH_STATUS[status]}`)
   }
 
@@ -66,8 +74,27 @@ function ViolationDetailPage() {
     setNotice('Đã tạo báo cáo Excel')
   }
 
-  const sendNotification = () => {
-    setNotice(`Đã gửi cảnh báo · ${violation.typeLabel} · ${violation.cameraName}`)
+  const sendNotification = async () => {
+    if (!canSendAlert) {
+      setNotice('Bạn không có quyền gửi cảnh báo thử nghiệm')
+      return
+    }
+
+    setSendingAlert(true)
+    setNotice('')
+
+    try {
+      const result = await sendNotificationTest('dashboard')
+      if (result?.status === 'success' || result?.ok) {
+        setNotice(`Đã gửi cảnh báo thử nghiệm · ${violation.typeLabel} · ${violation.cameraName}`)
+      } else {
+        setNotice(result?.message || 'Không gửi được cảnh báo — kiểm tra cấu hình thông báo')
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Không gửi được cảnh báo')
+    } finally {
+      setSendingAlert(false)
+    }
   }
 
   const exportPdf = () => window.print()
@@ -91,8 +118,14 @@ function ViolationDetailPage() {
           <button type="button" className="btn btn--primary" onClick={generateReport}>
             <FileText size={16} /> Tạo báo cáo
           </button>
-          <button type="button" className="btn btn--outline" onClick={sendNotification}>
-            <Bell size={16} /> Gửi cảnh báo
+          <button
+            type="button"
+            className="btn btn--outline"
+            onClick={sendNotification}
+            disabled={sendingAlert || !canSendAlert}
+            title={canSendAlert ? 'Gửi cảnh báo thử nghiệm qua dashboard' : 'Cần quyền settings.write'}
+          >
+            <Bell size={16} /> {sendingAlert ? 'Đang gửi...' : 'Gửi cảnh báo'}
           </button>
           <button type="button" className="btn btn--outline" onClick={exportPdf}>
             <Download size={16} /> PDF

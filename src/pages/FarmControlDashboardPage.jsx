@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Activity,
   AlertTriangle,
   Camera,
   Inbox,
   LayoutDashboard,
   Map,
   PenLine,
+  Settings,
   ShieldCheck,
   Wifi,
   WifiOff,
@@ -23,6 +23,9 @@ import {
 } from 'recharts'
 import ErrorBoundary from '../components/common/ErrorBoundary'
 import SmartFarmDesigner from '../components/farmGis/SmartFarmDesigner'
+import DashboardLiveSection from '../components/dashboard/DashboardLiveSection'
+import CollapsibleRealtimeEventPanel from '../components/realtime/CollapsibleRealtimeEventPanel'
+import EventsListPanel from '../components/EventsListPanel'
 import {
   ATSH_DEDUCTIONS,
   CHART_DATA,
@@ -40,6 +43,7 @@ import { getDefaultDesignerState } from '../data/smartFarmDesigner'
 import { atshViolations, computeAtshKpis } from '../data/atshViolations'
 import { useEventStore } from '../context/EventStore'
 import { useViolationProcessing } from '../context/ViolationProcessingContext'
+import { useDashboardBootstrap } from '../context/DashboardBootstrapStore'
 import { API_BASE_URL } from '../config/api'
 
 function asList(value) {
@@ -47,7 +51,8 @@ function asList(value) {
 }
 
 function FarmControlDashboardPage() {
-  const { metrics, connected } = useEventStore()
+  const { metrics, connected, cameras } = useEventStore()
+  const { data: bootstrapData } = useDashboardBootstrap()
   const { openMetrics } = useViolationProcessing()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') === 'ban-do' ? 'ban-do' : 'tong-quan'
@@ -159,31 +164,37 @@ function FarmControlDashboardPage() {
   const openCritical = violationMetrics.openCritical ?? 0
   const onlineCameras = eventMetrics.onlineCameras ?? 0
   const totalCameras = eventMetrics.totalCameras ?? 0
+  const offlineCameras = Math.max(0, totalCameras - onlineCameras)
+  const alertsToday = eventMetrics.totalEventsToday ?? violationsToday
+  const camerasNeedConfig = bootstrapData?.cameraSummary?.health?.warning ?? 0
   const mapZones = asList(mapData?.zones)
   const mapCameras = asList(mapData?.cameras)
   const safeDeductions = asList(deductions)
+  const liveCameras = cameras?.length ? cameras : bootstrapData?.cameraSummary?.cameras
 
   const stats = [
-    { label: 'Điểm ATSH', value: `${atshScore}`, suffix: '/100', icon: ShieldCheck, tone: scoreTone },
-    { label: 'Vi phạm chưa xử lý', value: openToday, icon: AlertTriangle, tone: openToday > 0 ? 'attention' : 'safe' },
-    { label: 'Vi phạm nghiêm trọng', value: openCritical, icon: Activity, tone: openCritical > 0 ? 'risk' : 'safe' },
-    { label: 'Camera online', value: `${onlineCameras}/${totalCameras}`, icon: Camera, tone: 'safe' },
+    { label: 'Tổng Camera', value: totalCameras, icon: Camera, tone: 'safe' },
+    { label: 'Camera Online', value: onlineCameras, icon: Wifi, tone: 'safe' },
+    { label: 'Camera Offline', value: offlineCameras, icon: WifiOff, tone: offlineCameras > 0 ? 'attention' : 'safe' },
+    { label: 'Cảnh báo hôm nay', value: alertsToday, icon: AlertTriangle, tone: alertsToday > 0 ? 'attention' : 'safe' },
+    { label: 'Vi phạm ATSH hôm nay', value: violationsToday, icon: ShieldCheck, tone: violationsToday > 0 ? 'attention' : 'safe' },
+    { label: 'Camera cần cấu hình', value: camerasNeedConfig, icon: Settings, tone: camerasNeedConfig > 0 ? 'attention' : 'safe' },
   ]
 
   return (
-    <div className="farm-control">
-      <header className="farm-control__hero">
-        <div>
-          <span className="farm-control__eyebrow">Dành cho chủ trại</span>
-          <h1>Bảng điều khiển chủ trại</h1>
-          <p>Tổng quan ATSH, bản đồ trang trại và vi phạm — đơn giản, dễ hiểu.</p>
-        </div>
+    <div className="farm-control farm-control--enterprise">
+      <div className="farm-control__toolbar">
+        <header className="farm-control__hero">
+          <div>
+            <h1>Bảng điều khiển</h1>
+            <p>Tổng quan giám sát ATSH — camera, cảnh báo và trạng thái hệ thống</p>
+          </div>
+        </header>
         <div className={`farm-control__live${connected ? ' farm-control__live--on' : ''}`}>
           {connected ? <Wifi size={16} /> : <WifiOff size={16} />}
           <span>{connected ? 'Cập nhật thời gian thực' : 'Đang kết nối WebSocket...'}</span>
-          <small>{openToday} vi phạm chưa xử lý hôm nay</small>
         </div>
-      </header>
+      </div>
 
       <nav className="farm-control__tabs">
         <button
@@ -210,7 +221,7 @@ function FarmControlDashboardPage() {
         {activeTab === 'ban-do' ? (
           <SmartFarmDesigner embedded />
         ) : (
-          <>
+          <div className="dashboard-enterprise">
             <section className="farm-control__kpis">
               {stats.map((item) => {
                 const Icon = item.icon
@@ -226,7 +237,170 @@ function FarmControlDashboardPage() {
               })}
             </section>
 
-            <div className="farm-control__layout">
+            <ErrorBoundary fallbackTitle="Không thể hiển thị camera live">
+              <section className="dashboard-enterprise__row dashboard-enterprise__row--primary">
+                <DashboardLiveSection cameras={liveCameras} />
+                <div className="dashboard-enterprise__stack">
+                  <CollapsibleRealtimeEventPanel defaultExpanded variant="page" limit={12} />
+                </div>
+              </section>
+            </ErrorBoundary>
+
+            <ErrorBoundary fallbackTitle="Không thể hiển thị sự kiện">
+              <section className="dashboard-enterprise__row dashboard-enterprise__row--secondary">
+                <EventsListPanel />
+                <div className="dashboard-enterprise__stack">
+                  <aside className="farm-control__score panel">
+                  <h2>Điểm ATSH</h2>
+                  <p>Bắt đầu 100 điểm · Trừ theo vi phạm hôm nay</p>
+                  <div className={`farm-score-ring farm-score-ring--${scoreTone}`}>
+                    <strong>{atshScore}</strong>
+                    <span>/ 100</span>
+                  </div>
+                  <ul className="farm-deductions">
+                    {safeDeductions.map((item) => (
+                      <li key={item.key}>
+                        <span>{item.label}</span>
+                        <span>-{item.points} đ · ×{item.count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="farm-deductions__note">
+                    {ATSH_DEDUCTIONS.map((item) => item.label).join(' · ')}
+                  </div>
+                </aside>
+
+                <article className="panel dashboard-system-status">
+                  <div className="panel__header">
+                    <div>
+                      <h2>Trạng thái hệ thống</h2>
+                      <p>Giám sát vận hành thời gian thực</p>
+                    </div>
+                  </div>
+                  <ul className="dashboard-system-status__list">
+                    <li className={`dashboard-system-status__item dashboard-system-status__item--${connected ? 'ok' : 'warn'}`}>
+                      <span>AI Engine</span>
+                      <strong>{connected ? 'Hoạt động' : 'Đang kết nối…'}</strong>
+                    </li>
+                    <li className="dashboard-system-status__item dashboard-system-status__item--ok">
+                      <span>Camera Online</span>
+                      <strong>{onlineCameras}/{totalCameras}</strong>
+                    </li>
+                    <li className={`dashboard-system-status__item dashboard-system-status__item--${openCritical > 0 ? 'risk' : 'ok'}`}>
+                      <span>Vi phạm nghiêm trọng</span>
+                      <strong>{openCritical}</strong>
+                    </li>
+                    <li className={`dashboard-system-status__item dashboard-system-status__item--${openToday > 0 ? 'warn' : 'ok'}`}>
+                      <span>Vi phạm chưa xử lý</span>
+                      <strong>{openToday}</strong>
+                    </li>
+                    <li className={`dashboard-system-status__item dashboard-system-status__item--${connected ? 'ok' : 'warn'}`}>
+                      <span>Gateway</span>
+                      <strong>{connected ? 'WebSocket OK' : 'Đang kết nối…'}</strong>
+                    </li>
+                    <li className={`dashboard-system-status__item dashboard-system-status__item--${camerasNeedConfig > 0 ? 'warn' : 'ok'}`}>
+                      <span>Notification</span>
+                      <strong>{camerasNeedConfig > 0 ? `${camerasNeedConfig} camera cần cấu hình` : 'Ổn định'}</strong>
+                    </li>
+                  </ul>
+                </article>
+              </div>
+            </section>
+            </ErrorBoundary>
+
+            <ErrorBoundary fallbackTitle="Không thể hiển thị biểu đồ">
+              <section className="dashboard-enterprise__row dashboard-enterprise__row--charts">
+              <section className="farm-control__chart panel panel--chart">
+                <div className="panel__header">
+                  <div>
+                    <h2>Biểu đồ vi phạm</h2>
+                    <p>Vi phạm theo ngày</p>
+                  </div>
+                  <div className="farm-chart-tabs">
+                    {[
+                      ['day', 'Theo ngày'],
+                      ['week', 'Theo tuần'],
+                      ['month', 'Theo tháng'],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`farm-chart-tabs__btn${chartRange === value ? ' farm-chart-tabs__btn--active' : ''}`}
+                        onClick={() => setChartRange(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="farm-chart">
+                  {asList(chartData).length === 0 ? (
+                    <div className="atsh-soc__empty">
+                      <Inbox size={28} />
+                      <p>Chưa có dữ liệu.</p>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
+                        <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="value" stroke="#0B6B1B" strokeWidth={3} dot={{ r: 4 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </section>
+
+              {[
+                ['Top khu vực vi phạm', topZones],
+                ['Top camera vi phạm', topCameras],
+              ].map(([title, items]) => {
+                const list = asList(items)
+                return (
+                  <article key={title} className="farm-top panel">
+                    <h2>{title}</h2>
+                    {list.length === 0 ? (
+                      <p className="farm-top__empty">Chưa có dữ liệu.</p>
+                    ) : (
+                      <ul>
+                        {list.map((item, index) => (
+                          <li key={`${item?.name || 'item'}-${index}`}>
+                            <span>{index + 1}. {item?.name || 'Chưa có dữ liệu'}</span>
+                            <strong>{item?.count ?? 0}</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </article>
+                )
+              })}
+            </section>
+            </ErrorBoundary>
+
+            <ErrorBoundary fallbackTitle="Không thể hiển thị top quy tắc">
+              <section className="dashboard-enterprise__row dashboard-enterprise__row--details-wide">
+              <article className="farm-top panel">
+                <h2>Top quy tắc bị vi phạm</h2>
+                {asList(topRules).length === 0 ? (
+                  <p className="farm-top__empty">Chưa có dữ liệu.</p>
+                ) : (
+                  <ul>
+                    {asList(topRules).map((item, index) => (
+                      <li key={`${item?.name || 'item'}-${index}`}>
+                        <span>{index + 1}. {item?.name || 'Chưa có dữ liệu'}</span>
+                        <strong>{item?.count ?? 0}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </article>
+            </section>
+            </ErrorBoundary>
+
+            <ErrorBoundary fallbackTitle="Không thể hiển thị bản đồ trang trại">
+              <section className="dashboard-enterprise__row dashboard-enterprise__row--details-wide">
               <section className="farm-control__map panel">
                 <div className="panel__header">
                   <div>
@@ -283,98 +457,9 @@ function FarmControlDashboardPage() {
                   )}
                 </div>
               </section>
-
-              <aside className="farm-control__score panel">
-                <h2>Điểm ATSH</h2>
-                <p>Bắt đầu 100 điểm · Trừ theo vi phạm hôm nay</p>
-                <div className={`farm-score-ring farm-score-ring--${scoreTone}`}>
-                  <strong>{atshScore}</strong>
-                  <span>/ 100</span>
-                </div>
-                <ul className="farm-deductions">
-                  {safeDeductions.map((item) => (
-                    <li key={item.key}>
-                      <span>{item.label}</span>
-                      <span>-{item.points} đ · ×{item.count}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="farm-deductions__note">
-                  {ATSH_DEDUCTIONS.map((item) => item.label).join(' · ')}
-                </div>
-              </aside>
-            </div>
-
-            <section className="farm-control__tops">
-              {[
-                ['Top khu vực vi phạm', topZones],
-                ['Top camera vi phạm', topCameras],
-                ['Top quy tắc bị vi phạm', topRules],
-              ].map(([title, items]) => {
-                const list = asList(items)
-                return (
-                  <article key={title} className="farm-top panel">
-                    <h2>{title}</h2>
-                    {list.length === 0 ? (
-                      <p className="farm-top__empty">Chưa có dữ liệu.</p>
-                    ) : (
-                      <ul>
-                        {list.map((item, index) => (
-                          <li key={`${item?.name || 'item'}-${index}`}>
-                            <span>{index + 1}. {item?.name || 'Chưa có dữ liệu'}</span>
-                            <strong>{item?.count ?? 0}</strong>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </article>
-                )
-              })}
-            </section>
-
-            <section className="farm-control__chart panel panel--chart">
-              <div className="panel__header">
-                <div>
-                  <h2>Biểu đồ vi phạm</h2>
-                  <p>Theo dõi xu hướng vi phạm ATSH</p>
-                </div>
-                <div className="farm-chart-tabs">
-                  {[
-                    ['day', 'Theo ngày'],
-                    ['week', 'Theo tuần'],
-                    ['month', 'Theo tháng'],
-                  ].map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`farm-chart-tabs__btn${chartRange === value ? ' farm-chart-tabs__btn--active' : ''}`}
-                      onClick={() => setChartRange(value)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="farm-chart">
-                {asList(chartData).length === 0 ? (
-                  <div className="atsh-soc__empty">
-                    <Inbox size={28} />
-                    <p>Chưa có dữ liệu.</p>
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
-                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="value" stroke="#0B6B1B" strokeWidth={3} dot={{ r: 4 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </section>
-          </>
+              </section>
+            </ErrorBoundary>
+          </div>
         )}
       </ErrorBoundary>
     </div>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_RULE_FORM, RULE_SEVERITIES, RULE_TYPES } from '../../config/rules'
-import { getZones } from '../../services/zoneService'
+import { CAMERA_ZONES_UPDATED_EVENT } from '../../services/cameraZoneOverlayService'
+import { ZONE_PUBLISHED_EVENT } from '../../services/zonePublishService'
+import { loadEngineZones } from '../../utils/cameraZoneReadiness'
 import {
   createRule,
   deleteRule,
@@ -11,7 +13,7 @@ import {
 import { triggerRule } from '../../services/mockRuleEngine'
 import RuleList from './RuleList'
 
-function RuleEditor({ cameraId, onEventCreated }) {
+function RuleEditor({ cameraId, monitoringReady = true, onEventCreated }) {
   const mountedRef = useRef(true)
   const [rules, setRules] = useState([])
   const [zones, setZones] = useState([])
@@ -58,7 +60,7 @@ function RuleEditor({ cameraId, onEventCreated }) {
     try {
       const [rulesData, zonesData] = await Promise.all([
         getRules(cameraId),
-        getZones(cameraId),
+        loadEngineZones(cameraId),
       ])
       if (!mountedRef.current) return
       setRules(rulesData)
@@ -74,6 +76,22 @@ function RuleEditor({ cameraId, onEventCreated }) {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  useEffect(() => {
+    const handleZonesUpdated = (event) => {
+      const updatedCameraId = event.detail?.cameraId
+      if (!updatedCameraId || updatedCameraId === cameraId) {
+        loadData()
+      }
+    }
+
+    window.addEventListener(CAMERA_ZONES_UPDATED_EVENT, handleZonesUpdated)
+    window.addEventListener(ZONE_PUBLISHED_EVENT, handleZonesUpdated)
+    return () => {
+      window.removeEventListener(CAMERA_ZONES_UPDATED_EVENT, handleZonesUpdated)
+      window.removeEventListener(ZONE_PUBLISHED_EVENT, handleZonesUpdated)
+    }
+  }, [cameraId, loadData])
 
   const resetForm = () => {
     setEditingRuleId(null)
@@ -183,6 +201,11 @@ function RuleEditor({ cameraId, onEventCreated }) {
   }
 
   const handleTest = async (rule) => {
+    if (!monitoringReady) {
+      setError('Camera chưa cấu hình vùng ATSH hợp lệ. Rule Engine không kiểm tra theo vùng.')
+      return
+    }
+
     setTestingRuleId(rule.id)
     setError('')
     setSuccess('')
@@ -202,6 +225,11 @@ function RuleEditor({ cameraId, onEventCreated }) {
 
   return (
     <section className="rule-manager">
+      {!monitoringReady ? (
+        <p className="rule-manager__gate" role="status">
+          Camera chưa cấu hình vùng ATSH — kiểm tra Rule theo vùng đang tắt cho camera này.
+        </p>
+      ) : null}
       <div className="rule-manager__layout">
         <form className="rule-manager__form panel panel--compact" onSubmit={handleSubmit}>
           <div className="panel__header">
